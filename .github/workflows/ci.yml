@@ -23,8 +23,11 @@ jobs:
       # non-Docker integration tests (it_go_compat). The Docker-dependent
       # black-box tests (it_resolve, it_coverage) run in the integration job.
       - name: cargo test (unit + doc + go_compat)
+        # `--doc` cannot be combined with `--lib`/`--bins` in a single
+        # invocation, so we run them as separate steps.
         run: |
-          cargo test --workspace --locked --lib --bins --doc
+          cargo test --workspace --locked --lib --bins
+          cargo test --workspace --locked --doc
           cargo test --workspace --locked --test it_go_compat
         env:
           ENVS_HELPER_STUB: "1"
