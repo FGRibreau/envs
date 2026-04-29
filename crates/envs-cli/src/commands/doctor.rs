@@ -69,9 +69,7 @@ async fn check_daemon_ping() -> std::result::Result<String, String> {
 async fn check_xcode_cli() -> std::result::Result<String, String> {
     let output = Command::new("xcode-select").arg("-p").output().await;
     match output {
-        Ok(o) if o.status.success() => {
-            Ok(String::from_utf8_lossy(&o.stdout).trim().to_string())
-        }
+        Ok(o) if o.status.success() => Ok(String::from_utf8_lossy(&o.stdout).trim().to_string()),
         _ => Err("xcode-select -p failed".into()),
     }
 }

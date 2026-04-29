@@ -68,9 +68,13 @@ pub enum Response {
         expires_at: DateTime<Utc>,
     },
 
-    Rules { rules: Vec<RuleSummary> },
+    Rules {
+        rules: Vec<RuleSummary>,
+    },
 
-    Rule { rule: Option<RuleDetail> },
+    Rule {
+        rule: Option<RuleDetail>,
+    },
 
     Status {
         version: String,
@@ -83,7 +87,10 @@ pub enum Response {
 
     Ok,
 
-    Error { code: ErrorCode, message: String },
+    Error {
+        code: ErrorCode,
+        message: String,
+    },
 }
 
 /// One env var entry to inject (key + value).

@@ -14,7 +14,7 @@ use objc2::mutability;
 use objc2::rc::Retained;
 use objc2::{sel, ClassType, DeclaredClass};
 use objc2_app_kit::{
-    NSApplication, NSButton, NSStackView, NSStatusItem, NSStatusBar, NSVariableStatusItemLength,
+    NSApplication, NSButton, NSStackView, NSStatusBar, NSStatusItem, NSVariableStatusItemLength,
     NSWindow, NSWindowStyleMask,
 };
 use objc2_foundation::{
@@ -217,7 +217,11 @@ impl EnvsAppDelegate {
                     return;
                 }
                 let binding_checked = vec![true; bindings.len()];
-                let scope_choice = if is_system_binary(&req.canon_path) { 1 } else { 0 };
+                let scope_choice = if is_system_binary(&req.canon_path) {
+                    1
+                } else {
+                    0
+                };
                 let save_target_choice = if req.project_root.is_some() { 0 } else { 1 };
                 let tab = TabState {
                     request: req,
@@ -360,9 +364,7 @@ impl EnvsAppDelegate {
         // Left side: tabs list (vertical NSStackView of buttons)
         let tabs_panel = unsafe { NSStackView::new(mtm) };
         unsafe {
-            tabs_panel.setOrientation(
-                objc2_app_kit::NSUserInterfaceLayoutOrientation::Vertical,
-            );
+            tabs_panel.setOrientation(objc2_app_kit::NSUserInterfaceLayoutOrientation::Vertical);
             tabs_panel.setSpacing(2.0);
             tabs_panel.setEdgeInsets(NSEdgeInsets {
                 top: 12.0,
@@ -422,8 +424,7 @@ impl EnvsAppDelegate {
                 .collect::<Vec<_>>()
                 .join(" ")
         ));
-        let title_field =
-            unsafe { objc2_app_kit::NSTextField::labelWithString(&title_text, mtm) };
+        let title_field = unsafe { objc2_app_kit::NSTextField::labelWithString(&title_text, mtm) };
         unsafe {
             let font = objc2_app_kit::NSFont::boldSystemFontOfSize(14.0);
             title_field.setFont(Some(&font));
@@ -460,9 +461,7 @@ impl EnvsAppDelegate {
         for (i, b) in tab.bindings.iter().enumerate() {
             let row = unsafe { NSStackView::new(mtm) };
             unsafe {
-                row.setOrientation(
-                    objc2_app_kit::NSUserInterfaceLayoutOrientation::Horizontal,
-                );
+                row.setOrientation(objc2_app_kit::NSUserInterfaceLayoutOrientation::Horizontal);
                 row.setSpacing(6.0);
             }
             let label = format!("{}  ←  {}", b.env, b.source);
@@ -475,7 +474,8 @@ impl EnvsAppDelegate {
                 )
             };
             // NSControlStateValue is a type alias for isize; 1=on, 0=off
-            let state: objc2_app_kit::NSControlStateValue = if tab.binding_checked[i] { 1 } else { 0 };
+            let state: objc2_app_kit::NSControlStateValue =
+                if tab.binding_checked[i] { 1 } else { 0 };
             unsafe { cb.setState(state) };
             unsafe { row.addArrangedSubview(&cb) };
             control_refs.push(unsafe { Retained::cast(cb) });
@@ -487,16 +487,13 @@ impl EnvsAppDelegate {
             objc2_app_kit::NSTextField::labelWithString(&NSString::from_str("Scope:"), mtm)
         };
         unsafe { root.addArrangedSubview(&scope_label) };
-        let scope_popup =
-            unsafe { objc2_app_kit::NSPopUpButton::new(mtm) };
+        let scope_popup = unsafe { objc2_app_kit::NSPopUpButton::new(mtm) };
         unsafe {
             scope_popup.addItemWithTitle(&NSString::from_str(&format!(
                 "Any invocation of {}",
                 tab.request.binary_name
             )));
-            scope_popup.addItemWithTitle(&NSString::from_str(&format!(
-                "Only this exact command",
-            )));
+            scope_popup.addItemWithTitle(&NSString::from_str(&format!("Only this exact command",)));
             scope_popup.selectItemAtIndex(tab.scope_choice as isize);
         }
         unsafe { root.addArrangedSubview(&scope_popup) };
@@ -507,8 +504,7 @@ impl EnvsAppDelegate {
             objc2_app_kit::NSTextField::labelWithString(&NSString::from_str("Duration:"), mtm)
         };
         unsafe { root.addArrangedSubview(&dur_label) };
-        let dur_popup =
-            unsafe { objc2_app_kit::NSPopUpButton::new(mtm) };
+        let dur_popup = unsafe { objc2_app_kit::NSPopUpButton::new(mtm) };
         for (label, _) in DURATION_CHOICES {
             unsafe { dur_popup.addItemWithTitle(&NSString::from_str(label)) };
         }
@@ -524,8 +520,7 @@ impl EnvsAppDelegate {
             )
         };
         unsafe { root.addArrangedSubview(&save_label) };
-        let save_popup =
-            unsafe { objc2_app_kit::NSPopUpButton::new(mtm) };
+        let save_popup = unsafe { objc2_app_kit::NSPopUpButton::new(mtm) };
         let project_label = tab
             .request
             .project_root
@@ -543,9 +538,7 @@ impl EnvsAppDelegate {
         // Buttons row: Cancel + Authorize
         let buttons_row = unsafe { NSStackView::new(mtm) };
         unsafe {
-            buttons_row.setOrientation(
-                objc2_app_kit::NSUserInterfaceLayoutOrientation::Horizontal,
-            );
+            buttons_row.setOrientation(objc2_app_kit::NSUserInterfaceLayoutOrientation::Horizontal);
             buttons_row.setSpacing(8.0);
         }
         let cancel_btn = unsafe {
@@ -595,7 +588,9 @@ impl EnvsAppDelegate {
         let active = *self.ivars().active_tab.borrow();
         let controls = self.ivars().current_controls.borrow();
         let mut tabs = self.ivars().tabs.borrow_mut();
-        let Some(tab) = tabs.get_mut(active) else { return };
+        let Some(tab) = tabs.get_mut(active) else {
+            return;
+        };
         let n_bindings = tab.bindings.len();
         if controls.len() < n_bindings + 3 {
             return;
@@ -641,17 +636,19 @@ impl EnvsAppDelegate {
         let active = *self.ivars().active_tab.borrow();
         let tab_snapshot = {
             let tabs = self.ivars().tabs.borrow();
-            tabs.get(active).map(|t| (
-                t.request.request_id.clone(),
-                t.request.argv.clone(),
-                t.request.canon_path.clone(),
-                t.request.project_root.clone(),
-                t.binding_checked.clone(),
-                t.bindings.clone(),
-                t.scope_choice,
-                t.duration_choice,
-                t.save_target_choice,
-            ))
+            tabs.get(active).map(|t| {
+                (
+                    t.request.request_id.clone(),
+                    t.request.argv.clone(),
+                    t.request.canon_path.clone(),
+                    t.request.project_root.clone(),
+                    t.binding_checked.clone(),
+                    t.bindings.clone(),
+                    t.scope_choice,
+                    t.duration_choice,
+                    t.save_target_choice,
+                )
+            })
         };
         let Some((
             request_id,
@@ -699,10 +696,13 @@ impl EnvsAppDelegate {
         let touchid_ok = match crate::auth::prompt_biometric(&reason) {
             Ok(ok) => ok,
             Err(e) => {
-                self.complete_tab(active, HelperReply::Error {
-                    request_id,
-                    message: e,
-                });
+                self.complete_tab(
+                    active,
+                    HelperReply::Error {
+                        request_id,
+                        message: e,
+                    },
+                );
                 return;
             }
         };

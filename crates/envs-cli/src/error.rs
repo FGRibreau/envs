@@ -40,16 +40,16 @@ impl CliError {
     /// Translate this error into a process exit code following BSD sysexits.h conventions.
     pub fn exit_code(&self) -> i32 {
         match self {
-            CliError::DaemonNotRunning => 75,         // EX_TEMPFAIL
+            CliError::DaemonNotRunning => 75, // EX_TEMPFAIL
             CliError::NonInteractive => 75,
             CliError::CommandNotFound(_) => 127,
-            CliError::NothingToRun => 64,             // EX_USAGE
+            CliError::NothingToRun => 64, // EX_USAGE
             CliError::Daemon { code, .. } => match code {
-                ErrorCode::NotAuthorized => 77,       // EX_NOPERM (user cancelled)
+                ErrorCode::NotAuthorized => 77, // EX_NOPERM (user cancelled)
                 ErrorCode::SystemBinaryRefused => 77,
                 ErrorCode::PeerVerificationFailed => 77,
                 ErrorCode::RbwLocked | ErrorCode::RbwNotInstalled => 75,
-                _ => 70,                              // EX_SOFTWARE
+                _ => 70, // EX_SOFTWARE
             },
             _ => 70,
         }

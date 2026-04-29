@@ -1,0 +1,46 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  upload-assets:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-13
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          # Bundle all three binaries into a single archive per target.
+          bin: |
+            envs
+            envsd
+            envs-prompt
+          target: ${{ matrix.target }}
+          archive: envs-$tag-$target
+          tar: unix
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Include the LaunchAgent template + scripts so users can run
+          # `scripts/codesign.sh` and install the daemon out of the tarball.
+          include: |
+            packaging/com.fgribreau.envsd.plist.template
+            scripts/codesign.sh
+            README.md
+            LICENSE
+            DEVELOPMENT.md

@@ -50,17 +50,14 @@ async fn link(to_global: bool, binary: String) -> Result<()> {
             std::fs::create_dir_all(parent)?;
         }
         std::fs::copy(pp, &global_path)?;
-        println!(
-            "✓ promoted: {} → {}",
-            pp.display(),
-            global_path.display()
-        );
+        println!("✓ promoted: {} → {}", pp.display(), global_path.display());
         Ok(())
     } else {
         // Demote global → project
         let pp = project_path.ok_or_else(|| {
             CliError::Internal(
-                "no project root detected (no .envs/ ancestor) — run `envs project init` first".into(),
+                "no project root detected (no .envs/ ancestor) — run `envs project init` first"
+                    .into(),
             )
         })?;
         if !global_path.is_file() {
@@ -79,11 +76,7 @@ async fn link(to_global: bool, binary: String) -> Result<()> {
             std::fs::create_dir_all(parent)?;
         }
         std::fs::copy(&global_path, &pp)?;
-        println!(
-            "✓ demoted: {} → {}",
-            global_path.display(),
-            pp.display()
-        );
+        println!("✓ demoted: {} → {}", global_path.display(), pp.display());
         Ok(())
     }
 }
@@ -92,10 +85,7 @@ async fn init() -> Result<()> {
     let cwd = std::env::current_dir()?;
     let envs_dir = cwd.join(".envs");
     if envs_dir.exists() {
-        println!(
-            "✓ .envs/ already exists at {}",
-            envs_dir.display()
-        );
+        println!("✓ .envs/ already exists at {}", envs_dir.display());
     } else {
         std::fs::create_dir_all(&envs_dir)?;
         let readme = envs_dir.join("README.md");
@@ -161,7 +151,10 @@ async fn show() -> Result<()> {
             Ok(())
         }
         None => {
-            println!("(no .envs/ found by walking up from {}); run `envs project init` to create one.", cwd.display());
+            println!(
+                "(no .envs/ found by walking up from {}); run `envs project init` to create one.",
+                cwd.display()
+            );
             Err(CliError::Internal("no project root".into())).or(Ok(())) // print is enough
         }
     }

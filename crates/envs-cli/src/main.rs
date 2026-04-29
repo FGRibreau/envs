@@ -202,14 +202,13 @@ async fn dispatch(cli: Cli) -> Result<()> {
 }
 
 fn init_tracing(verbose: bool) {
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| {
-            if verbose {
-                tracing_subscriber::EnvFilter::new("envs=debug")
-            } else {
-                tracing_subscriber::EnvFilter::new("envs=info")
-            }
-        });
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        if verbose {
+            tracing_subscriber::EnvFilter::new("envs=debug")
+        } else {
+            tracing_subscriber::EnvFilter::new("envs=info")
+        }
+    });
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(false)

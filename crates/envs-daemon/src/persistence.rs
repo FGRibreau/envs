@@ -42,7 +42,11 @@ pub fn load() -> Result<Vec<Rule>> {
         return Ok(Vec::new());
     }
     let now = Utc::now();
-    let alive: Vec<Rule> = file.rules.into_iter().filter(|r| !r.is_expired(now)).collect();
+    let alive: Vec<Rule> = file
+        .rules
+        .into_iter()
+        .filter(|r| !r.is_expired(now))
+        .collect();
     Ok(alive)
 }
 

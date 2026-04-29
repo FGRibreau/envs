@@ -66,7 +66,9 @@ fn key_file() -> Result<PathBuf> {
 /// Load or generate the HMAC key, and load the last hmac from the latest log line.
 fn init_chain() -> Result<ChainState> {
     let path = key_file()?;
-    let parent = path.parent().ok_or_else(|| DaemonError::Internal("audit key has no parent".into()))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| DaemonError::Internal("audit key has no parent".into()))?;
     std::fs::create_dir_all(parent)?;
     set_dir_perms(parent, 0o700)?;
 
@@ -134,7 +136,9 @@ pub fn log(mut event: AuditEvent) -> Result<()> {
     set_dir_perms(&dir, 0o700)?;
 
     // Lazy-init the chain state.
-    let mut guard = CHAIN_STATE.lock().map_err(|e| DaemonError::Internal(format!("audit lock: {e}")))?;
+    let mut guard = CHAIN_STATE
+        .lock()
+        .map_err(|e| DaemonError::Internal(format!("audit lock: {e}")))?;
     if guard.is_none() {
         *guard = Some(init_chain()?);
     }
@@ -188,7 +192,9 @@ fn rotate_if_needed(path: &std::path::Path) -> Result<()> {
         Err(_) => return Ok(()),
     };
 
-    let modified_date = chrono::DateTime::<Utc>::from(modified).format("%Y-%m-%d").to_string();
+    let modified_date = chrono::DateTime::<Utc>::from(modified)
+        .format("%Y-%m-%d")
+        .to_string();
     let today = Utc::now().format("%Y-%m-%d").to_string();
     if modified_date == today {
         return Ok(());

@@ -59,7 +59,10 @@ async fn main() -> anyhow::Result<()> {
         match HelperHandle::spawn_real().await {
             Ok(h) => Arc::new(h),
             Err(e) => {
-                tracing::warn!(?e, "envs-prompt subprocess unavailable, falling back to stub");
+                tracing::warn!(
+                    ?e,
+                    "envs-prompt subprocess unavailable, falling back to stub"
+                );
                 Arc::new(HelperHandle::stub())
             }
         }

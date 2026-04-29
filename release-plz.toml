@@ -1,0 +1,52 @@
+[workspace]
+# Conventional-commit-style changelog generation.
+changelog_update = true
+# Tag format: vX.Y.Z (workspace-wide, all crates released in lockstep).
+git_tag_name = "v{{ version }}"
+# Release on GitHub.
+git_release_enable = true
+# Publish to crates.io.
+publish = true
+# Allow releasing the only set of packages in the repo even when only chore
+# commits exist (we still want a release on the first run).
+release_always = false
+# Don't allow publishing dirty trees.
+publish_allow_dirty = false
+# Lockstep: keep all 4 crates on the same version number — simplifies user-facing
+# semver and matches how cargo install / brew install fetches them together.
+dependencies_update = true
+
+# Order matters for crates.io publishes: deps first, then dependents.
+[[package]]
+name = "envs-proto"
+
+[[package]]
+name = "envs-daemon"
+
+[[package]]
+name = "envs-prompt"
+
+[[package]]
+name = "envs-cli"
+
+[changelog]
+body = """
+## [{{ version }}]{% if release_link %}({{ release_link }}){% endif %} - {{ timestamp | date(format="%Y-%m-%d") }}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {% if commit.scope %}*({{ commit.scope }})* {% endif %}{{ commit.message | upper_first }}{% if commit.links %} ({% for link in commit.links %}[{{ link.text }}]({{ link.href }}){% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
+{% endfor %}
+{% endfor %}
+"""
+commit_parsers = [
+  { message = "^feat", group = "Added" },
+  { message = "^fix", group = "Fixed" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactored" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^chore\\(deps\\)", group = "Dependencies" },
+  { message = "^chore", skip = true },
+  { message = "^test", skip = true },
+  { message = "^ci", skip = true },
+]

@@ -76,10 +76,12 @@ async fn start() -> Result<()> {
 
     use std::process::{Command as StdCommand, Stdio};
     let stdout_log = std::fs::OpenOptions::new()
-        .create(true).append(true)
+        .create(true)
+        .append(true)
         .open(log_dir.join("envsd.stdout.log"))?;
     let stderr_log = std::fs::OpenOptions::new()
-        .create(true).append(true)
+        .create(true)
+        .append(true)
         .open(log_dir.join("envsd.stderr.log"))?;
     let child = StdCommand::new(&envsd)
         .stdin(Stdio::null())
@@ -119,13 +121,17 @@ async fn stop() -> Result<()> {
     // Direct: read pid file, send SIGTERM
     let pid_path = pid_file_path()?;
     if !pid_path.exists() {
-        println!("(no pid file at {} — daemon may not be running)", pid_path.display());
+        println!(
+            "(no pid file at {} — daemon may not be running)",
+            pid_path.display()
+        );
         return Ok(());
     }
     let pid_str = std::fs::read_to_string(&pid_path)?;
-    let pid: i32 = pid_str.trim().parse().map_err(|e| {
-        CliError::Internal(format!("bad pid file: {e}"))
-    })?;
+    let pid: i32 = pid_str
+        .trim()
+        .parse()
+        .map_err(|e| CliError::Internal(format!("bad pid file: {e}")))?;
     use nix::sys::signal::{kill, Signal};
     use nix::unistd::Pid;
     match kill(Pid::from_raw(pid), Signal::SIGTERM) {
@@ -179,9 +185,7 @@ async fn status() -> Result<()> {
 
 async fn install_launch_agent(force: bool) -> Result<()> {
     let envsd = find_envsd().await.ok_or_else(|| {
-        CliError::Internal(
-            "envsd not on PATH. Run: cargo install --path crates/envs-daemon".into(),
-        )
+        CliError::Internal("envsd not on PATH. Run: cargo install --path crates/envs-daemon".into())
     })?;
     let home = dirs::home_dir().ok_or_else(|| CliError::Internal("no home dir".into()))?;
     let agents_dir = home.join("Library").join("LaunchAgents");

@@ -6,9 +6,9 @@ use secrecy::ExposeSecret;
 use std::ffi::CString;
 
 pub struct ExecArgs {
-    pub argv0: CString,         // typically the canonical path
-    pub args: Vec<CString>,     // including argv[0] = the command name
-    pub env: Vec<CString>,      // KEY=VALUE strings
+    pub argv0: CString,     // typically the canonical path
+    pub args: Vec<CString>, // including argv[0] = the command name
+    pub env: Vec<CString>,  // KEY=VALUE strings
 }
 
 /// Build the merged env: inherit current env, then overlay injected secrets.

@@ -64,16 +64,13 @@ pub async fn execute(argv: Vec<String>, profiles: &[String], binds: &[String]) -
         .collect();
     let env = exec::build_env(&injected);
 
-    let argv0 = exec::cstring(canon_path.to_str().ok_or_else(|| {
-        CliError::Internal(format!("non-utf8 path: {}", canon_path.display()))
-    })?)?;
+    let argv0 =
+        exec::cstring(canon_path.to_str().ok_or_else(|| {
+            CliError::Internal(format!("non-utf8 path: {}", canon_path.display()))
+        })?)?;
     let args = exec::cstrings(argv.iter().map(String::as_str))?;
 
-    let _: std::convert::Infallible = exec::run(exec::ExecArgs {
-        argv0,
-        args,
-        env,
-    })?;
+    let _: std::convert::Infallible = exec::run(exec::ExecArgs { argv0, args, env })?;
     unreachable!("execve replaces the current process on success")
 }
 

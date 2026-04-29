@@ -119,7 +119,9 @@ async fn status_reports_version() {
     let h = start_daemon();
     let resp = send(&h.socket, &Request::Status).await;
     match resp {
-        Response::Status { version, protocol, .. } => {
+        Response::Status {
+            version, protocol, ..
+        } => {
             assert!(!version.is_empty());
             assert_eq!(protocol, envs_proto::PROTOCOL_VERSION);
         }

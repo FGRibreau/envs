@@ -62,7 +62,10 @@ impl HelperHandle {
                 }
                 retry_window.push(now);
 
-                tracing::info!("spawning envs-prompt (retry {}/3 in 30s window)", retry_window.len());
+                tracing::info!(
+                    "spawning envs-prompt (retry {}/3 in 30s window)",
+                    retry_window.len()
+                );
                 let child = match Command::new("envs-prompt")
                     .stdin(std::process::Stdio::piped())
                     .stdout(std::process::Stdio::piped())
@@ -78,7 +81,9 @@ impl HelperHandle {
                     }
                 };
 
-                if let Err(e) = run_one_helper_session(child, &pending_for_supervisor, &mut stdin_rx).await {
+                if let Err(e) =
+                    run_one_helper_session(child, &pending_for_supervisor, &mut stdin_rx).await
+                {
                     tracing::warn!(?e, "envs-prompt session ended");
                 }
                 // Brief pause before respawn

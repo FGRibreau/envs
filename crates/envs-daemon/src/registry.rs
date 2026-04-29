@@ -109,7 +109,10 @@ pub async fn sync(force: bool) -> Result<SyncResult> {
             .map_err(|e| DaemonError::Internal(format!("git pull failed: {e}")))?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(DaemonError::Internal(format!("git pull: {}", stderr.trim())));
+            return Err(DaemonError::Internal(format!(
+                "git pull: {}",
+                stderr.trim()
+            )));
         }
         SyncResult::Pulled
     } else {
@@ -126,7 +129,10 @@ pub async fn sync(force: bool) -> Result<SyncResult> {
             .map_err(|e| DaemonError::Internal(format!("git clone failed: {e}")))?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(DaemonError::Internal(format!("git clone: {}", stderr.trim())));
+            return Err(DaemonError::Internal(format!(
+                "git clone: {}",
+                stderr.trim()
+            )));
         }
         SyncResult::Cloned
     };

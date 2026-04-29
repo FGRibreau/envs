@@ -318,7 +318,9 @@ mod tests {
     fn parse_help_blacklisted_filtered() {
         let help = "USAGE: flarectl [OPTIONS] COMMAND";
         let out = parse_help_for_env_vars(help, "flarectl");
-        assert!(out.iter().all(|s| !["USAGE", "OPTIONS", "COMMAND"].contains(&s.env.as_str())));
+        assert!(out
+            .iter()
+            .all(|s| !["USAGE", "OPTIONS", "COMMAND"].contains(&s.env.as_str())));
     }
 
     #[test]

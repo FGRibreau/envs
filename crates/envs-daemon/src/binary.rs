@@ -59,7 +59,9 @@ mod tests {
         assert!(is_system_binary(&PathBuf::from("/usr/bin/curl")));
         assert!(is_system_binary(&PathBuf::from("/bin/sh")));
         assert!(is_system_binary(&PathBuf::from("/System/Library/Foo")));
-        assert!(!is_system_binary(&PathBuf::from("/opt/homebrew/bin/flarectl")));
+        assert!(!is_system_binary(&PathBuf::from(
+            "/opt/homebrew/bin/flarectl"
+        )));
         assert!(!is_system_binary(&PathBuf::from("/Users/me/bin/cf-curl")));
     }
 }

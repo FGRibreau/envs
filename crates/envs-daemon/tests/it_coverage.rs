@@ -109,7 +109,10 @@ async fn send(socket: &std::path::Path, req: &Request) -> Response {
 }
 
 fn write_global_profile(home: &std::path::Path, binary: &str, env_key: &str, source: &str) {
-    let path = home.join(".envs").join("profiles").join(format!("{binary}.toml"));
+    let path = home
+        .join(".envs")
+        .join("profiles")
+        .join(format!("{binary}.toml"));
     let content = format!(
         r#"
 schema = 1
@@ -295,7 +298,9 @@ async fn project_root_creates_separate_rule() {
     )
     .await;
     let id_a = match r_a {
-        Response::Resolved { rule_id, entries, .. } => {
+        Response::Resolved {
+            rule_id, entries, ..
+        } => {
             assert_eq!(entries[0].key, "PROJ_A");
             rule_id
         }
@@ -319,7 +324,9 @@ async fn project_root_creates_separate_rule() {
     )
     .await;
     let id_b = match r_b {
-        Response::Resolved { rule_id, entries, .. } => {
+        Response::Resolved {
+            rule_id, entries, ..
+        } => {
             assert_eq!(entries[0].key, "PROJ_B");
             rule_id
         }
@@ -398,8 +405,14 @@ async fn extra_bindings_override_profile() {
         Response::Resolved { entries, .. } => {
             // Both bindings should be present (profile + inline).
             let keys: Vec<String> = entries.iter().map(|e| e.key.clone()).collect();
-            assert!(keys.contains(&"PROFILE_KEY".to_string()), "missing PROFILE_KEY in {keys:?}");
-            assert!(keys.contains(&"INLINE_KEY".to_string()), "missing INLINE_KEY in {keys:?}");
+            assert!(
+                keys.contains(&"PROFILE_KEY".to_string()),
+                "missing PROFILE_KEY in {keys:?}"
+            );
+            assert!(
+                keys.contains(&"INLINE_KEY".to_string()),
+                "missing INLINE_KEY in {keys:?}"
+            );
         }
         other => panic!("expected Resolved, got {other:?}"),
     }
@@ -436,7 +449,10 @@ async fn extra_bindings_conflict_with_profile_succeeds_with_inline_winning() {
     .await;
     match resp {
         Response::Resolved { entries, .. } => {
-            let entry = entries.iter().find(|e| e.key == "OVERRIDE_KEY").expect("OVERRIDE_KEY missing");
+            let entry = entries
+                .iter()
+                .find(|e| e.key == "OVERRIDE_KEY")
+                .expect("OVERRIDE_KEY missing");
             // Fake rbw shim returns "v-<item>-<field>". With --bind override the item is NEW_SRC.
             assert_eq!(entry.value, "v-NEW_SRC-password");
         }
@@ -518,8 +534,10 @@ async fn vault_locked_returns_clear_error() {
     .await;
     match resp {
         Response::Error { code, message } => {
-            assert!(matches!(code, envs_proto::ErrorCode::RbwLocked),
-                "expected RbwLocked, got {code:?} (message: {message})");
+            assert!(
+                matches!(code, envs_proto::ErrorCode::RbwLocked),
+                "expected RbwLocked, got {code:?} (message: {message})"
+            );
         }
         other => panic!("expected Error, got {other:?}"),
     }
@@ -554,12 +572,24 @@ async fn audit_verify_with_persistent_tmp() {
     // Audit file should exist with chained events
     let audit_path = home_dir.join(".envs/logs/audit.jsonl");
     let key_path = home_dir.join(".envs/state/audit.key");
-    assert!(audit_path.exists(), "audit.jsonl missing at {}", audit_path.display());
-    assert!(key_path.exists(), "audit.key missing at {}", key_path.display());
+    assert!(
+        audit_path.exists(),
+        "audit.jsonl missing at {}",
+        audit_path.display()
+    );
+    assert!(
+        key_path.exists(),
+        "audit.key missing at {}",
+        key_path.display()
+    );
 
     let content = std::fs::read_to_string(&audit_path).unwrap();
     let lines: Vec<&str> = content.lines().filter(|l| !l.is_empty()).collect();
-    assert!(lines.len() >= 2, "expected at least daemon_start + grant events, got {}", lines.len());
+    assert!(
+        lines.len() >= 2,
+        "expected at least daemon_start + grant events, got {}",
+        lines.len()
+    );
 
     // Verify each event has _hmac field (HMAC chain)
     for (i, line) in lines.iter().enumerate() {

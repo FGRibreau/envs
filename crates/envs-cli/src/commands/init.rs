@@ -7,7 +7,10 @@ pub async fn execute(force: bool) -> Result<()> {
     println!("envs setup wizard\n");
 
     println!("[1/5] Checking rbw...");
-    let rbw_ok = Command::new("rbw").arg("--version").output().await
+    let rbw_ok = Command::new("rbw")
+        .arg("--version")
+        .output()
+        .await
         .map(|o| o.status.success())
         .unwrap_or(false);
     if rbw_ok {
@@ -20,7 +23,11 @@ pub async fn execute(force: bool) -> Result<()> {
     }
 
     println!("\n[2/5] Checking rbw login state...");
-    let logged_in = Command::new("rbw").arg("config").arg("show").output().await
+    let logged_in = Command::new("rbw")
+        .arg("config")
+        .arg("show")
+        .output()
+        .await
         .map(|o| o.status.success() && !o.stdout.is_empty())
         .unwrap_or(false);
     if logged_in && !force {
@@ -32,7 +39,10 @@ pub async fn execute(force: bool) -> Result<()> {
     }
 
     println!("\n[3/5] Checking rbw unlock state...");
-    let unlocked = Command::new("rbw").arg("unlocked").status().await
+    let unlocked = Command::new("rbw")
+        .arg("unlocked")
+        .status()
+        .await
         .map(|s| s.success())
         .unwrap_or(false);
     if unlocked {
@@ -45,7 +55,9 @@ pub async fn execute(force: bool) -> Result<()> {
     println!("\n[4/5] LaunchAgent for envsd...");
     match install_launch_agent(force).await {
         Ok(InstallResult::Installed(path)) => println!("  ✓ installed at {}", path.display()),
-        Ok(InstallResult::AlreadyInstalled(path)) => println!("  ✓ already installed at {}", path.display()),
+        Ok(InstallResult::AlreadyInstalled(path)) => {
+            println!("  ✓ already installed at {}", path.display())
+        }
         Ok(InstallResult::EnvsdNotFound) => {
             println!("  ! envsd binary not found on PATH");
             println!("    Run: cargo install --path crates/envs-daemon");
@@ -77,7 +89,8 @@ async fn install_launch_agent(force: bool) -> Result<InstallResult> {
         Some(p) => p,
         None => return Ok(InstallResult::EnvsdNotFound),
     };
-    let home = dirs::home_dir().ok_or_else(|| crate::error::CliError::Internal("no home dir".into()))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| crate::error::CliError::Internal("no home dir".into()))?;
     let agents_dir = home.join("Library").join("LaunchAgents");
     std::fs::create_dir_all(&agents_dir)?;
     let plist_path = agents_dir.join("com.fgribreau.envsd.plist");
@@ -131,7 +144,10 @@ async fn sync_registry() -> std::result::Result<String, String> {
             .await
             .map_err(|e| e.to_string())?;
         if !out.status.success() {
-            return Err(format!("git pull: {}", String::from_utf8_lossy(&out.stderr).trim()));
+            return Err(format!(
+                "git pull: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
         }
         Ok(format!("registry up to date at {}", dir.display()))
     } else {

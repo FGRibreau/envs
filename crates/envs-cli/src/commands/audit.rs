@@ -6,7 +6,12 @@ use std::io::{BufRead, BufReader};
 pub async fn execute(action: super::super::AuditAction) -> Result<()> {
     use super::super::AuditAction;
     match action {
-        AuditAction::Show { since: _, binary, event, project: _ } => show(binary, event).await,
+        AuditAction::Show {
+            since: _,
+            binary,
+            event,
+            project: _,
+        } => show(binary, event).await,
         AuditAction::Export { path } => export(path).await,
         AuditAction::Verify => verify().await,
     }
@@ -23,7 +28,8 @@ async fn verify() -> Result<()> {
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 
-    let home = dirs::home_dir().ok_or_else(|| crate::error::CliError::Internal("no home dir".into()))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| crate::error::CliError::Internal("no home dir".into()))?;
     let log_path = home.join(".envs").join("logs").join("audit.jsonl");
     let key_path = home.join(".envs").join("state").join("audit.key");
 
@@ -90,7 +96,8 @@ async fn verify() -> Result<()> {
 }
 
 fn audit_log_path() -> Result<std::path::PathBuf> {
-    let home = dirs::home_dir().ok_or_else(|| crate::error::CliError::Internal("no home dir".into()))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| crate::error::CliError::Internal("no home dir".into()))?;
     Ok(home.join(".envs").join("logs").join("audit.jsonl"))
 }
 
@@ -127,18 +134,9 @@ async fn show(binary_filter: Option<String>, event_filter: Option<String>) -> Re
                 continue;
             }
         }
-        let ts = value
-            .get("ts")
-            .and_then(|v| v.as_str())
-            .unwrap_or("?");
-        let ev = value
-            .get("event")
-            .and_then(|v| v.as_str())
-            .unwrap_or("?");
-        let path_str = value
-            .get("path")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let ts = value.get("ts").and_then(|v| v.as_str()).unwrap_or("?");
+        let ev = value.get("event").and_then(|v| v.as_str()).unwrap_or("?");
+        let path_str = value.get("path").and_then(|v| v.as_str()).unwrap_or("");
         println!("{ts}  {ev:24} {path_str}");
         count += 1;
     }

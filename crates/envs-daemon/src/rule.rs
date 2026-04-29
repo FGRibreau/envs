@@ -8,7 +8,7 @@ use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Rule {
-    pub id: String,                          // ulid
+    pub id: String, // ulid
     pub canon_path: PathBuf,
     pub sha256: String,
     pub codesign_team: Option<String>,
@@ -37,7 +37,8 @@ impl Rule {
         ttl: Duration,
     ) -> Self {
         let now = Utc::now();
-        let expires = now + chrono::Duration::from_std(ttl).unwrap_or(chrono::Duration::seconds(300));
+        let expires =
+            now + chrono::Duration::from_std(ttl).unwrap_or(chrono::Duration::seconds(300));
         Self {
             id: ulid::Ulid::new().to_string(),
             canon_path,

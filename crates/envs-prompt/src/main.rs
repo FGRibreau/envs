@@ -151,22 +151,20 @@ fn run_native_mode() -> anyhow::Result<()> {
 
     // Background thread: poll outgoing queue → write to stdout
     let outgoing_queue = queues.clone();
-    std::thread::spawn(move || {
-        loop {
-            let replies: Vec<HelperReply> = {
-                let mut q = match outgoing_queue.outgoing.lock() {
-                    Ok(q) => q,
-                    Err(_) => return,
-                };
-                q.drain(..).collect()
+    std::thread::spawn(move || loop {
+        let replies: Vec<HelperReply> = {
+            let mut q = match outgoing_queue.outgoing.lock() {
+                Ok(q) => q,
+                Err(_) => return,
             };
-            for r in replies {
-                if let Err(e) = send_reply(&r) {
-                    tracing::warn!(?e, "failed to send reply");
-                }
+            q.drain(..).collect()
+        };
+        for r in replies {
+            if let Err(e) = send_reply(&r) {
+                tracing::warn!(?e, "failed to send reply");
             }
-            std::thread::sleep(std::time::Duration::from_millis(50));
         }
+        std::thread::sleep(std::time::Duration::from_millis(50));
     });
 
     // Hand off main thread to NSApplication's run loop. Returns when
@@ -227,8 +225,8 @@ fn is_system_binary(path: &std::path::Path) -> bool {
 }
 
 fn send_reply(reply: &HelperReply) -> std::io::Result<()> {
-    let mut buf = serde_json::to_vec(reply)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    let mut buf =
+        serde_json::to_vec(reply).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
     buf.push(b'\n');
     let stdout = std::io::stdout();
     let mut handle = stdout.lock();

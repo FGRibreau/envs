@@ -127,9 +127,7 @@ pub async fn discover(binary_name: &str, _help_text: &str) -> Vec<SuggestedBindi
 
 /// v0.2 stub. v0.3 will replace with a real reqwest call to Anthropic API.
 async fn query_llm_stub(_binary_name: &str) -> Vec<SuggestedBinding> {
-    tracing::debug!(
-        "LLM discovery is enabled but the API client is a v0.3 task; returning empty"
-    );
+    tracing::debug!("LLM discovery is enabled but the API client is a v0.3 task; returning empty");
     Vec::new()
 }
 

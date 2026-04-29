@@ -146,7 +146,10 @@ impl Handlers {
         crate::binary::ensure_not_world_writable(canon_path)?;
 
         // Look for an existing rule that matches.
-        let existing = self.rule_cache.find_match(canon_path, &argv, project_root).await;
+        let existing = self
+            .rule_cache
+            .find_match(canon_path, &argv, project_root)
+            .await;
 
         let rule = match existing {
             Some(r) => {
@@ -179,16 +182,32 @@ impl Handlers {
                         crate::persistence::save(&self.rule_cache.snapshot().await).ok();
                         updated
                     } else {
-                        self.create_via_helper(canon_path, sha256, codesign_team, argv.clone(), project_root, &profiles, &extra_bindings)
-                            .await?
+                        self.create_via_helper(
+                            canon_path,
+                            sha256,
+                            codesign_team,
+                            argv.clone(),
+                            project_root,
+                            &profiles,
+                            &extra_bindings,
+                        )
+                        .await?
                     }
                 } else {
                     r
                 }
             }
             None => {
-                self.create_via_helper(canon_path, sha256, codesign_team, argv.clone(), project_root, &profiles, &extra_bindings)
-                    .await?
+                self.create_via_helper(
+                    canon_path,
+                    sha256,
+                    codesign_team,
+                    argv.clone(),
+                    project_root,
+                    &profiles,
+                    &extra_bindings,
+                )
+                .await?
             }
         };
 
@@ -199,7 +218,9 @@ impl Handlers {
                 Some(v) => v,
                 None => {
                     let v = rbw::get(src).await?;
-                    self.value_cache.insert(k.clone(), src.clone(), v.clone()).await;
+                    self.value_cache
+                        .insert(k.clone(), src.clone(), v.clone())
+                        .await;
                     let _ = audit::event("resolve")
                         .field("rule_id", &rule.id)
                         .field("env_key", k)
@@ -246,12 +267,8 @@ impl Handlers {
         //   2. Each named profile from `--profile X --profile Y` (with includes recursion)
         //   3. Inline `--bind` overrides on top
         // Conflict detection: same env_var twice with different sources → fail-fast.
-        let current_profile = compose_profile(
-            &binary_name,
-            project_root,
-            named_profiles,
-            extra_bindings,
-        )?;
+        let current_profile =
+            compose_profile(&binary_name, project_root, named_profiles, extra_bindings)?;
         let req = PromptRequest {
             request_id: request_id.clone(),
             canon_path: canon_path.to_path_buf(),
@@ -266,10 +283,7 @@ impl Handlers {
             current_profile,
         };
 
-        let reply = self
-            .helper
-            .request(req, Duration::from_secs(120))
-            .await?;
+        let reply = self.helper.request(req, Duration::from_secs(120)).await?;
 
         let (bindings, scope, ttl_secs, _save) = match reply {
             HelperReply::Authorized {
@@ -336,7 +350,10 @@ impl Handlers {
             .field("path", canon_path.to_string_lossy())
             .field("argv", &argv)
             .field("env_keys", &env_keys)
-            .field("project_root", project_root.map(|p| p.to_string_lossy().to_string()))
+            .field(
+                "project_root",
+                project_root.map(|p| p.to_string_lossy().to_string()),
+            )
             .field("expires_at", rule.expires_at.to_rfc3339())
             .write();
 
