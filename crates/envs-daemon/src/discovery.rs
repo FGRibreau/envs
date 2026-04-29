@@ -3,7 +3,8 @@
 //! Order:
 //! 1. Registry lookup (curated community catalog)
 //! 2. `<bin> --help` parsing (regex + prefix heuristics)
-//! 3. (opt-in v0.2) LLM query for unknown tools
+//! 3. LLM query for unknown tools (opt-in via `[llm].enabled` or
+//!    `ENVS_LLM_ENABLED=1`; requires `ANTHROPIC_API_KEY` to actually fire)
 //!
 //! Output: a list of `SuggestedBinding`s with confidence scores, used to
 //! pre-fill the popup so the user doesn't have to type env var names from scratch.
@@ -45,7 +46,7 @@ pub async fn discover(binary_path: &Path, binary_name: &str) -> Vec<SuggestedBin
         suggestions.entry(sugg.env.clone()).or_insert(sugg);
     }
 
-    // 3. LLM query (opt-in via ENVS_LLM_ENABLED=1; v0.2 ships scaffolding only)
+    // 3. LLM query (opt-in; only invoked when registry + --help yielded nothing).
     if crate::llm::is_enabled() && suggestions.is_empty() {
         for sugg in crate::llm::discover(binary_name, &help_text).await {
             suggestions.entry(sugg.env.clone()).or_insert(sugg);

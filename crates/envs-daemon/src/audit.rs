@@ -1,12 +1,12 @@
 //! Audit log: append-only JSON Lines, daily rotation, HMAC-chained.
 //!
-//! v0.2: each event includes a `_hmac` field equal to
+//! Each event carries a `_hmac` field equal to
 //!     HMAC-SHA256(prev_hmac || serialized_event_without_hmac, key)
 //! where `key` is a 32-byte random secret stored in `~/.envs/state/audit.key`
-//! (mode 0600), generated on first use.
+//! (mode 0600), generated on first use. The chain links each event to its
+//! predecessor so any insertion, edit, or deletion is detectable.
 //!
-//! `envs audit verify` walks the log and validates the chain. Insertions,
-//! edits, or deletions break the chain.
+//! `envs audit verify` walks the log and validates the chain end-to-end.
 //!
 //! Never logs secret values.
 

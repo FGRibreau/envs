@@ -86,7 +86,7 @@ enum Command {
     },
 
     /// Print shell completions.
-    Completions { shell: clap_complete_shell::Shell },
+    Completions { shell: clap_complete::Shell },
 }
 
 #[derive(Subcommand, Debug)]
@@ -143,18 +143,6 @@ enum DaemonAction {
     Status,
     Install,
     Uninstall,
-}
-
-// Stub shell enum — the real one lives in clap_complete; we re-export it under
-// a private alias to keep the import line cleaner. Replace once `clap_complete`
-// is added to dependencies (Phase 7 — completions).
-mod clap_complete_shell {
-    #[derive(Debug, Clone, clap::ValueEnum)]
-    pub enum Shell {
-        Bash,
-        Zsh,
-        Fish,
-    }
 }
 
 fn main() {
