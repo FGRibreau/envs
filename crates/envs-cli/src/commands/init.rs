@@ -70,44 +70,54 @@ pub async fn execute(force: bool) -> Result<()> {
     // `rbw config show` only proves the email is set — not that login worked.
     let already_logged_in = rbw_db_exists();
     let cfg = read_rbw_config().await;
-    let email_configured = cfg.get("email").map(|e| e.contains('@')).unwrap_or(false);
 
     if already_logged_in && !force {
         println!("  ✓ rbw login state OK (vault DB present)");
     } else {
-        if !email_configured || force {
-            let email = prompt_line("  Bitwarden email > ")?;
+        // Always confirm email + server URL before the login attempt. The
+        // previous email/URL may be from an aborted run, and we don't want
+        // to spend a master-password prompt on the wrong endpoint. Defaults
+        // come from the existing rbw config so re-runs are quick.
+        let current_email = cfg.get("email").cloned().unwrap_or_default();
+        let email = if current_email.is_empty() {
+            prompt_line("  Bitwarden email > ")?
+        } else {
+            prompt_line_with_default(
+                &format!("  Bitwarden email [{current_email}] > "),
+                &current_email,
+            )?
+        };
+        if email != current_email {
             rbw_config_set("email", &email).await?;
             println!("  ✓ email set to {email}");
-
-            // Server URL: empty (default) → Bitwarden cloud (api.bitwarden.com).
-            // Anything else → self-hosted Vaultwarden / on-prem Bitwarden domain.
-            let current_url = cfg.get("base_url").cloned().unwrap_or_default();
-            let hint = if current_url.is_empty() {
-                "  Server URL (Enter for Bitwarden cloud, or e.g. https://vault.example.com) > "
-                    .to_string()
-            } else {
-                format!("  Server URL [{current_url}] > ")
-            };
-            let url = prompt_line_with_default(&hint, &current_url)?;
-            if url.is_empty() {
-                // Cloud — clear any prior self-hosted override.
-                let _ = Command::new("rbw")
-                    .arg("config")
-                    .arg("unset")
-                    .arg("base_url")
-                    .output()
-                    .await;
-                println!("  ✓ using Bitwarden cloud (api.bitwarden.com)");
-            } else {
-                rbw_config_set("base_url", &url).await?;
-                println!("  ✓ server set to {url}");
-            }
         } else {
-            println!("  ✓ rbw email already configured");
-            if let Some(url) = cfg.get("base_url") {
-                println!("  ✓ server: {url}");
-            }
+            println!("  ✓ email: {email}");
+        }
+
+        // Server URL: empty (default) → Bitwarden cloud (api.bitwarden.com).
+        // Anything else → self-hosted Vaultwarden / on-prem Bitwarden domain.
+        let current_url = cfg.get("base_url").cloned().unwrap_or_default();
+        let hint = if current_url.is_empty() {
+            "  Self-hosted server URL (Enter = Bitwarden cloud, or e.g. https://vault.example.com) > "
+                .to_string()
+        } else {
+            format!("  Self-hosted server URL [{current_url}] (type 'cloud' to switch back to Bitwarden cloud) > ")
+        };
+        let url = prompt_line_with_default(&hint, &current_url)?;
+        if url.is_empty() || url.eq_ignore_ascii_case("cloud") {
+            // Cloud — clear any prior self-hosted override.
+            let _ = Command::new("rbw")
+                .arg("config")
+                .arg("unset")
+                .arg("base_url")
+                .output()
+                .await;
+            println!("  ✓ using Bitwarden cloud (api.bitwarden.com)");
+        } else if url != current_url {
+            rbw_config_set("base_url", &url).await?;
+            println!("  ✓ server set to {url}");
+        } else {
+            println!("  ✓ server: {url}");
         }
 
         // CRITICAL: pinentry-touchid wraps pinentry-mac for Keychain-cached
