@@ -135,6 +135,28 @@ declare_class!(
         fn tab_clicked(&self, sender: *mut NSButton) {
             self.handle_tab_click(sender);
         }
+
+        /// User clicked "+ Add custom binding": open osascript dialogs to
+        /// pick env-var name + Bitwarden item + field, then append to the
+        /// active tab's bindings list and rebuild the form.
+        #[method(addBindingClicked:)]
+        fn add_binding_clicked(&self, _sender: *mut NSButton) {
+            self.handle_add_binding();
+        }
+
+        /// User clicked the "Show window" menu item (NSStatusItem submenu).
+        #[method(menuShowClicked:)]
+        fn menu_show_clicked(&self, _sender: *mut NSObject) {
+            self.show_window();
+        }
+
+        /// User clicked "Quit envs-prompt" in the menubar menu.
+        #[method(menuQuitClicked:)]
+        fn menu_quit_clicked(&self, _sender: *mut NSObject) {
+            let mtm = MainThreadMarker::from(self);
+            let app = NSApplication::sharedApplication(mtm);
+            unsafe { app.terminate(None) };
+        }
     }
 );
 
@@ -158,7 +180,10 @@ impl EnvsAppDelegate {
     pub fn install_status_item(&self, mtm: MainThreadMarker) {
         let bar = unsafe { NSStatusBar::systemStatusBar() };
         let item = unsafe { bar.statusItemWithLength(NSVariableStatusItemLength) };
-        // Wire the button's action to selector statusItemClicked:
+        // Left-click toggles the window. Right-click (or long-press on the
+        // button) opens the NSMenu installed below — that gives us a
+        // discoverable surface for Show/Quit without crowding the status item
+        // title with extra icons.
         if let Some(button) = unsafe { item.button(mtm) } {
             unsafe {
                 button.setTitle(&NSString::from_str("envs"));
@@ -166,7 +191,54 @@ impl EnvsAppDelegate {
                 button.setAction(Some(sel!(statusItemClicked:)));
             }
         }
+        let menu = self.build_status_menu(mtm);
+        unsafe { item.setMenu(Some(&menu)) };
         *self.ivars().status_item.borrow_mut() = Some(item);
+    }
+
+    /// Build the right-click menu attached to the status item. Keeps the
+    /// surface intentionally small (Show, Quit) — the popup window itself
+    /// holds the per-request controls; the menu is just for app-level
+    /// affordances.
+    fn build_status_menu(&self, mtm: MainThreadMarker) -> Retained<objc2_app_kit::NSMenu> {
+        use objc2_app_kit::NSMenu;
+        use objc2_app_kit::NSMenuItem;
+        let menu = NSMenu::new(mtm);
+        unsafe { menu.setAutoenablesItems(false) };
+
+        // Show pending requests
+        let show = unsafe {
+            NSMenuItem::initWithTitle_action_keyEquivalent(
+                mtm.alloc::<NSMenuItem>(),
+                &NSString::from_str("Show pending requests"),
+                Some(sel!(menuShowClicked:)),
+                &NSString::from_str(""),
+            )
+        };
+        unsafe {
+            show.setTarget(Some(self));
+            menu.addItem(&show);
+        }
+
+        // Separator
+        let sep = NSMenuItem::separatorItem(mtm);
+        menu.addItem(&sep);
+
+        // Quit envs-prompt
+        let quit = unsafe {
+            NSMenuItem::initWithTitle_action_keyEquivalent(
+                mtm.alloc::<NSMenuItem>(),
+                &NSString::from_str("Quit envs-prompt"),
+                Some(sel!(menuQuitClicked:)),
+                &NSString::from_str("q"),
+            )
+        };
+        unsafe {
+            quit.setTarget(Some(self));
+            menu.addItem(&quit);
+        }
+
+        menu
     }
 
     pub fn install_window(&self, mtm: MainThreadMarker) {
@@ -187,6 +259,10 @@ impl EnvsAppDelegate {
         unsafe {
             win.setTitle(&NSString::from_str("envs — authorize secret access"));
             win.setReleasedWhenClosed(false);
+            // Persist the window's frame between sessions. macOS stores the
+            // last position+size in NSUserDefaults under this key so users
+            // who drag the popup once don't have to do it on every grant.
+            win.setFrameAutosaveName(&NSString::from_str("envs.popup.frame"));
         }
         *self.ivars().window.borrow_mut() = Some(win);
     }
@@ -514,6 +590,20 @@ impl EnvsAppDelegate {
             unsafe { root.addArrangedSubview(&row) };
         }
 
+        // "+ Add custom binding" — opens native osascript dialogs to pick
+        // env-name + Bitwarden item + field, then appends the new binding to
+        // the active tab's list. Reuses the same picker plumbing as the
+        // empty-bindings flow, just gated behind an explicit user click here.
+        let add_btn = unsafe {
+            NSButton::buttonWithTitle_target_action(
+                &NSString::from_str("+ Add custom binding"),
+                Some(self),
+                Some(sel!(addBindingClicked:)),
+                mtm,
+            )
+        };
+        unsafe { root.addArrangedSubview(&add_btn) };
+
         // Scope NSPopUpButton
         let scope_label = unsafe {
             objc2_app_kit::NSTextField::labelWithString(&NSString::from_str("Scope:"), mtm)
@@ -601,6 +691,78 @@ impl EnvsAppDelegate {
         win.setContentView(Some(&outer));
         *self.ivars().content_holder.borrow_mut() = Some(outer);
         *self.ivars().current_controls.borrow_mut() = control_refs;
+    }
+
+    /// Handle the "+ Add custom binding" button click.
+    ///
+    /// Reads checkbox/scope/duration/save-target state into the active TabState
+    /// first (so they survive the rebuild), then runs the osascript picker
+    /// inline (env name → fuzzy item → field). The picker is modal, so the
+    /// AppKit run loop pausing during it is fine — the user is interacting
+    /// with the modal child, not the popup. After dialog close, we append
+    /// the new binding and rebuild the form.
+    fn handle_add_binding(&self) {
+        // Persist what's currently entered before swapping out the controls.
+        self.read_current_controls();
+
+        let item_names = match crate::rbw::list_items() {
+            Ok(items) => items,
+            Err(e) => {
+                tracing::warn!(?e, "rbw list failed; cannot add binding interactively");
+                return;
+            }
+        };
+
+        let active = *self.ivars().active_tab.borrow();
+        let title = {
+            let tabs = self.ivars().tabs.borrow();
+            tabs.get(active)
+                .map(|t| format!("envs — add binding for `{}`", t.request.binary_name))
+                .unwrap_or_else(|| "envs".to_string())
+        };
+
+        let env = match crate::dialog::text_input("Env var name (UPPER_SNAKE_CASE):", "", &title) {
+            Ok(Some(s)) => s.trim().to_string(),
+            _ => return,
+        };
+        if env.is_empty() || !crate::is_valid_env_name(&env) {
+            return;
+        }
+
+        let item_name = match crate::dialog::pick_from_list(
+            &format!("Bitwarden item for {env}:"),
+            &item_names,
+            &title,
+        ) {
+            Ok(Some(s)) => s,
+            _ => return,
+        };
+
+        let fields = match crate::rbw::get_fields(&item_name) {
+            Ok(f) if !f.is_empty() => f,
+            _ => return,
+        };
+        let field = match crate::dialog::pick_from_list(
+            &format!("Field of '{item_name}':"),
+            &fields,
+            &title,
+        ) {
+            Ok(Some(s)) => s,
+            _ => return,
+        };
+
+        let binding = Binding {
+            env,
+            source: format!("rbw://{item_name}/{field}"),
+        };
+        {
+            let mut tabs = self.ivars().tabs.borrow_mut();
+            if let Some(tab) = tabs.get_mut(active) {
+                tab.bindings.push(binding);
+                tab.binding_checked.push(true);
+            }
+        }
+        self.rebuild_window_content();
     }
 
     fn handle_tab_click(&self, sender: *mut NSButton) {
