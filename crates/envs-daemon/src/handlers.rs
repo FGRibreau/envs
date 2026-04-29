@@ -285,9 +285,7 @@ impl Handlers {
         if _rbw_guard.is_some() {
             match rbw::lock().await {
                 Ok(()) => {
-                    let _ = audit::event("auto_lock")
-                        .field("rule_id", &rule.id)
-                        .write();
+                    let _ = audit::event("auto_lock").field("rule_id", &rule.id).write();
                 }
                 Err(e) => {
                     tracing::warn!(?e, "auto_lock failed");

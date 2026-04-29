@@ -313,13 +313,19 @@ async fn auto_lock_locks_rbw_after_resolve() {
 
     // Inspect the rbw shim log: lock must have been called after get.
     let log = std::fs::read_to_string(h._tmp.path().join("rbw.log")).unwrap_or_default();
-    assert!(log.contains("\nlock\n") || log.starts_with("lock"), "rbw lock not invoked, log was: {log}");
+    assert!(
+        log.contains("\nlock\n") || log.starts_with("lock"),
+        "rbw lock not invoked, log was: {log}"
+    );
     let lock_pos = log.find("lock\n").unwrap();
     let get_pos = log.find("get").expect("rbw get should have been called");
     assert!(get_pos < lock_pos, "lock must come AFTER get, log: {log}");
 
     // The lock-state file must exist (vault locked).
-    assert!(h._tmp.path().join("rbw.locked").exists(), "vault should be locked");
+    assert!(
+        h._tmp.path().join("rbw.locked").exists(),
+        "vault should be locked"
+    );
 }
 
 #[tokio::test]
@@ -339,13 +345,23 @@ async fn auto_unlock_retries_on_locked_vault() {
     }
 
     let log = std::fs::read_to_string(h._tmp.path().join("rbw.log")).unwrap_or_default();
-    let unlock_pos = log.find("unlock\n").expect("rbw unlock should have been called");
+    let unlock_pos = log
+        .find("unlock\n")
+        .expect("rbw unlock should have been called");
     let get_pos = log.find("get").expect("rbw get should have been called");
-    let lock_pos = log.rfind("lock\n").expect("rbw lock should have been called");
-    assert!(unlock_pos < get_pos, "unlock must come BEFORE get, log: {log}");
+    let lock_pos = log
+        .rfind("lock\n")
+        .expect("rbw lock should have been called");
+    assert!(
+        unlock_pos < get_pos,
+        "unlock must come BEFORE get, log: {log}"
+    );
     assert!(get_pos < lock_pos, "lock must come AFTER get, log: {log}");
     // Final state: locked again.
-    assert!(h._tmp.path().join("rbw.locked").exists(), "vault should end locked");
+    assert!(
+        h._tmp.path().join("rbw.locked").exists(),
+        "vault should end locked"
+    );
 }
 
 #[tokio::test]
