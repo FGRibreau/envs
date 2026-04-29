@@ -64,18 +64,12 @@ pub async fn execute(force: bool) -> Result<()> {
             ),
         }
     }
-    // Bind rbw to pinentry-touchid (idempotent).
-    let _ = Command::new("rbw")
-        .arg("config")
-        .arg("set")
-        .arg("pinentry")
-        .arg("pinentry-touchid")
-        .output()
-        .await;
-    println!("  ✓ rbw configured to use pinentry-touchid");
-
     println!("\n[4/6] rbw login state...");
-    let configured = Command::new("rbw")
+    // Did login already happen? rbw stores the encrypted vault DB at
+    // ~/.local/share/rbw/db.<email>.json after the first successful login.
+    // `rbw config show` only proves the email is set — not that login worked.
+    let already_logged_in = rbw_db_exists();
+    let email_configured = Command::new("rbw")
         .arg("config")
         .arg("show")
         .output()
@@ -87,26 +81,50 @@ pub async fn execute(force: bool) -> Result<()> {
                     .any(|l| l.trim().starts_with("email") && l.contains('@'))
         })
         .unwrap_or(false);
-    if configured && !force {
-        println!("  ✓ rbw email is configured");
+
+    if already_logged_in && !force {
+        println!("  ✓ rbw login state OK (vault DB present)");
     } else {
-        let email = prompt_line("  Bitwarden email > ")?;
-        let out = Command::new("rbw")
+        if !email_configured || force {
+            let email = prompt_line("  Bitwarden email > ")?;
+            let out = Command::new("rbw")
+                .arg("config")
+                .arg("set")
+                .arg("email")
+                .arg(&email)
+                .output()
+                .await
+                .map_err(|e| CliError::Internal(format!("rbw config set email: {e}")))?;
+            if !out.status.success() {
+                return Err(CliError::Internal(format!(
+                    "rbw config set email failed: {}",
+                    String::from_utf8_lossy(&out.stderr).trim()
+                )));
+            }
+            println!("  ✓ email set to {email}");
+        } else {
+            println!("  ✓ rbw email already configured");
+        }
+
+        // CRITICAL: pinentry-touchid wraps pinentry-mac for Keychain-cached
+        // unlocks AFTER a master password is known. On the very first login
+        // (no Keychain entry yet), pinentry-touchid hands off to pinentry-mac
+        // but its own EOF-handling has a known race that yields:
+        //   "rbw login: failed to read password from pinentry: error reading
+        //    pinentry output: unexpected EOF"
+        // Workaround used by every rbw + TouchID setup in the wild: do the
+        // initial login with pinentry-mac directly, then swap to pinentry-touchid
+        // for subsequent unlocks (which is where the TouchID gating actually
+        // matters). Override unconditionally — any prior partial run may have
+        // left pinentry=pinentry-touchid in rbw config.
+        let _ = Command::new("rbw")
             .arg("config")
             .arg("set")
-            .arg("email")
-            .arg(&email)
+            .arg("pinentry")
+            .arg("pinentry-mac")
             .output()
-            .await
-            .map_err(|e| CliError::Internal(format!("rbw config set email: {e}")))?;
-        if !out.status.success() {
-            return Err(CliError::Internal(format!(
-                "rbw config set email failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            )));
-        }
-        println!("  ✓ email set to {email}");
-        println!("  → Running `rbw login` (will prompt for your master password)...");
+            .await;
+        println!("  → Running `rbw login` via pinentry-mac (one-time bootstrap)...");
         let status = Command::new("rbw")
             .arg("login")
             .stdin(Stdio::inherit())
@@ -116,12 +134,33 @@ pub async fn execute(force: bool) -> Result<()> {
             .await
             .map_err(|e| CliError::Internal(format!("rbw login: {e}")))?;
         if !status.success() {
+            // Restore pinentry-touchid so the next `envs init` retry doesn't
+            // start from an inconsistent rbw config.
+            let _ = Command::new("rbw")
+                .arg("config")
+                .arg("set")
+                .arg("pinentry")
+                .arg("pinentry-touchid")
+                .output()
+                .await;
             return Err(CliError::BadArgs(
                 "rbw login failed — re-run `envs init` once you have your master password".into(),
             ));
         }
         println!("  ✓ rbw login successful");
     }
+
+    // Login is done (or was already done). Now bind pinentry-touchid for the
+    // hot path — `rbw unlock` from the daemon's auto-unlock will TouchID-gate
+    // each unlock and cache the master password in macOS Keychain.
+    let _ = Command::new("rbw")
+        .arg("config")
+        .arg("set")
+        .arg("pinentry")
+        .arg("pinentry-touchid")
+        .output()
+        .await;
+    println!("  ✓ rbw bound to pinentry-touchid for unlocks");
 
     println!("\n[5/6] LaunchAgent for envsd...");
     match install_launch_agent(force).await {
@@ -240,6 +279,27 @@ async fn install_launch_agent(force: bool) -> Result<InstallResult> {
         .await;
 
     Ok(InstallResult::Installed(plist_path))
+}
+
+/// True if rbw's encrypted vault DB is on disk — proof that `rbw login`
+/// completed at least once. The DB lives in
+/// `$XDG_DATA_HOME/rbw/db.<email>.json` (default `~/.local/share/rbw/`).
+fn rbw_db_exists() -> bool {
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|h| h.join(".local").join("share")));
+    let Some(dir) = base.map(|b| b.join("rbw")) else {
+        return false;
+    };
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(_) => return false,
+    };
+    entries.flatten().any(|e| {
+        let name = e.file_name();
+        let s = name.to_string_lossy();
+        s.starts_with("db.") && s.ends_with(".json")
+    })
 }
 
 async fn find_envsd_on_path() -> Option<std::path::PathBuf> {
