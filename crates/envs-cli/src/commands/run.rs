@@ -139,9 +139,10 @@ async fn try_resolve(
     }
 }
 
-/// Interactive fallback when the daemon reports BinaryNotInProfile. Reads
-/// `KEY=rbw://item[/field]` lines from stdin until an empty line. Validates
-/// each entry the same way `--bind` does and prints a one-line summary.
+/// Manual fallback for when the helper popup couldn't run (rbw locked,
+/// non-macOS, headless session). The primary "add binding" UX lives in
+/// `envs-prompt` as a native osascript dialog flow; this is the safety
+/// net users hit only when the helper itself failed.
 fn prompt_for_bindings_interactively(typed_name: &str) -> Result<Vec<Binding>> {
     eprintln!();
     eprintln!(
@@ -161,7 +162,7 @@ fn prompt_for_bindings_interactively(typed_name: &str) -> Result<Vec<Binding>> {
         let mut line = String::new();
         let n = handle.read_line(&mut line)?;
         if n == 0 {
-            break; // EOF
+            break;
         }
         let trimmed = line.trim();
         if trimmed.is_empty() {

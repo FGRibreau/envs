@@ -25,6 +25,10 @@ use envs_proto::{Binding, GrantScope, HelperEvent, HelperReply, ProfileTarget, P
 use std::io::{BufRead, Write};
 
 mod auth;
+#[cfg(target_os = "macos")]
+mod dialog;
+#[cfg(target_os = "macos")]
+mod rbw;
 
 #[cfg(target_os = "macos")]
 mod app;
@@ -177,6 +181,11 @@ fn run_native_mode() -> anyhow::Result<()> {
 /// Stub-mode handler: auto-approve with default scope (system-binary-aware).
 /// The user's saved profile is authoritative; discovery suggestions only
 /// matter when no profile exists yet (real popup shows both).
+///
+/// When all sources are empty AND we're on macOS in non-test mode, drive
+/// the user through a sequence of native osascript dialogs to add bindings
+/// (env-var name → fuzzy-pick item → choose field). Tests bypass this via
+/// `ENVS_PROMPT_AUTO_GRANT=1` which short-circuits to Cancel on empty.
 fn handle_request_stub(req: PromptRequest) -> HelperReply {
     let bindings: Vec<Binding> = if let Some(profile) = &req.current_profile {
         profile.bindings.clone()
@@ -189,7 +198,13 @@ fn handle_request_stub(req: PromptRequest) -> HelperReply {
             })
             .collect()
     } else {
-        Vec::new()
+        // No profile, no suggestions — try the interactive osascript flow.
+        // Tests force Cancel via ENVS_PROMPT_AUTO_GRANT=1 to keep CI deterministic.
+        if std::env::var_os("ENVS_PROMPT_AUTO_GRANT").is_some() {
+            Vec::new()
+        } else {
+            collect_bindings_interactively(&req.binary_name)
+        }
     };
 
     if bindings.is_empty() {
@@ -217,6 +232,106 @@ fn handle_request_stub(req: PromptRequest) -> HelperReply {
             .map(|_| ProfileTarget::Project)
             .or(Some(ProfileTarget::Global)),
     }
+}
+
+/// Drive the user through a sequence of native macOS dialogs to add
+/// bindings: env-var name (text input) → Bitwarden item (search-as-you-type
+/// list picker) → field (list picker) → "add another?" confirm. Loops until
+/// the user declines or cancels. Empty result means the user cancelled
+/// before authorising anything.
+#[cfg(target_os = "macos")]
+fn collect_bindings_interactively(binary_name: &str) -> Vec<Binding> {
+    let title = format!("envs — authorise `{binary_name}`");
+    let items = match rbw::list_items() {
+        Ok(items) => items,
+        Err(e) => {
+            tracing::warn!(?e, "rbw list failed, cannot prompt interactively");
+            return Vec::new();
+        }
+    };
+
+    let mut bindings: Vec<Binding> = Vec::new();
+    #[allow(clippy::while_let_loop)] // explicit `break` inside makes the loop body cleaner
+    loop {
+        let env = match dialog::text_input(
+            &format!("Env var to expose for `{binary_name}` (UPPER_SNAKE_CASE):"),
+            "",
+            &title,
+        ) {
+            Ok(Some(s)) => s.trim().to_string(),
+            Ok(None) | Err(_) => break,
+        };
+        if env.is_empty() {
+            break;
+        }
+        if !is_valid_env_name(&env) {
+            let _ = dialog::text_input(
+                &format!("'{env}' is not a valid env var name. Use [A-Z_][A-Z0-9_]*."),
+                "",
+                &title,
+            );
+            continue;
+        }
+
+        let item_name = match dialog::pick_from_list(
+            &format!("Bitwarden item for {env} (search):"),
+            &items,
+            &title,
+        ) {
+            Ok(Some(s)) => s,
+            Ok(None) | Err(_) => break,
+        };
+
+        let fields = match rbw::get_fields(&item_name) {
+            Ok(f) if !f.is_empty() => f,
+            _ => {
+                tracing::warn!(item = %item_name, "no readable fields on item");
+                continue;
+            }
+        };
+
+        let field = match dialog::pick_from_list(
+            &format!("Field of '{item_name}' for {env}:"),
+            &fields,
+            &title,
+        ) {
+            Ok(Some(s)) => s,
+            Ok(None) | Err(_) => break,
+        };
+
+        bindings.push(Binding {
+            env,
+            source: format!("rbw://{item_name}/{field}"),
+        });
+
+        let again = dialog::confirm(
+            &format!("Add another env var for `{binary_name}`?"),
+            false,
+            &title,
+        )
+        .unwrap_or(false);
+        if !again {
+            break;
+        }
+    }
+    bindings
+}
+
+#[cfg(not(target_os = "macos"))]
+fn collect_bindings_interactively(_binary_name: &str) -> Vec<Binding> {
+    Vec::new()
+}
+
+fn is_valid_env_name(s: &str) -> bool {
+    let mut chars = s.chars();
+    let first = match chars.next() {
+        Some(c) => c,
+        None => return false,
+    };
+    if !(first.is_ascii_uppercase() || first == '_') {
+        return false;
+    }
+    chars.all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
 }
 
 fn is_system_binary(path: &std::path::Path) -> bool {

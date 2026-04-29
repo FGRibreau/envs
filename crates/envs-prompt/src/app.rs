@@ -211,8 +211,42 @@ impl EnvsAppDelegate {
             HelperEvent::NewRequest(req) => {
                 let bindings = bindings_from_request(&req);
                 if bindings.is_empty() {
-                    self.send_reply(HelperReply::Cancelled {
-                        request_id: req.request_id,
+                    // No profile, no suggestions, no inline binds — drive the
+                    // user through native osascript dialogs to add bindings.
+                    // We MUST not block the AppKit run loop on osascript, so
+                    // spawn a worker thread that posts the reply via the
+                    // outgoing queue (drained to stdout by the writer thread).
+                    let queues = self.ivars().queues.clone();
+                    let req_clone = req.clone();
+                    std::thread::spawn(move || {
+                        let collected =
+                            crate::collect_bindings_interactively(&req_clone.binary_name);
+                        let reply = if collected.is_empty() {
+                            HelperReply::Cancelled {
+                                request_id: req_clone.request_id,
+                            }
+                        } else {
+                            HelperReply::Authorized {
+                                request_id: req_clone.request_id.clone(),
+                                bindings: collected,
+                                scope: if is_system_binary(&req_clone.canon_path) {
+                                    envs_proto::GrantScope::ExactArgv {
+                                        argv: req_clone.argv.clone(),
+                                    }
+                                } else {
+                                    envs_proto::GrantScope::Any
+                                },
+                                ttl_secs: 300,
+                                save_as_profile: req_clone
+                                    .project_root
+                                    .as_ref()
+                                    .map(|_| envs_proto::ProfileTarget::Project)
+                                    .or(Some(envs_proto::ProfileTarget::Global)),
+                            }
+                        };
+                        if let Ok(mut q) = queues.outgoing.lock() {
+                            q.push_back(reply);
+                        }
                     });
                     return;
                 }

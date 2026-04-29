@@ -357,15 +357,11 @@ impl Handlers {
         let current_profile =
             compose_profile(&binary_name, project_root, named_profiles, extra_bindings)?;
 
-        // Short-circuit when the helper has nothing to offer — no discovered suggestions,
-        // no profile, no inline --bind. The stub helper (v0.3 ships without AppKit)
-        // can't let the user add bindings interactively, so a popup with zero
-        // suggestions is unrecoverable. NoProfile maps to `BinaryNotInProfile`,
-        // which the CLI renders with concrete next steps (--bind syntax + how
-        // to write a project profile).
-        if suggested.is_empty() && current_profile.is_none() && extra_bindings.is_empty() {
-            return Err(DaemonError::NoProfile(binary_name));
-        }
+        // No short-circuit on empty suggestions: the helper now drives a
+        // native osascript dialog flow when nothing is pre-filled, so the
+        // user can pick item + field interactively (envs-prompt::main::
+        // collect_bindings_interactively). If they Cancel, the helper
+        // replies Cancelled and we surface that as `user cancelled`.
 
         let req = PromptRequest {
             request_id: request_id.clone(),

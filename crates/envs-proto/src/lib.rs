@@ -203,7 +203,7 @@ pub enum HelperReply {
 }
 
 /// What the daemon shows to the user in the popup tab.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptRequest {
     pub request_id: String,
     pub canon_path: PathBuf,
