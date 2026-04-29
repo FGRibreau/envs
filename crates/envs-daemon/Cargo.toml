@@ -37,6 +37,8 @@ dirs = { workspace = true }
 nix = { workspace = true }
 libc = { workspace = true }
 chrono = { workspace = true }
+# Optional LLM-powered discovery (gated behind config.llm.enabled).
+ureq = { version = "2.12", default-features = false, features = ["json", "tls"] }
 
 [dev-dependencies]
 tempfile = "3.13"

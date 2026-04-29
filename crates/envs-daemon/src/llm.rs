@@ -1,19 +1,13 @@
 //! Optional LLM-powered discovery for unknown binaries.
 //!
-//! v0.2 STATUS: scaffolding ready, HTTP call deliberately deferred.
-//!
 //! For binaries that aren't in the registry and don't expose useful `--help`,
-//! we can ask an LLM "what env vars does <binary> read?". The response is
-//! cached in `~/.envs/llm-cache.json` for 30 days.
+//! we ask Claude "what env vars does <binary> read?". The response is cached
+//! in `~/.envs/llm-cache.json` for 30 days.
 //!
-//! v0.2 ships the cache layer + opt-in plumbing. The actual Anthropic API call
-//! is stubbed (returns empty Vec). v0.3 will wire `reqwest` + Claude API client.
-//! Reason for the deferral: a robust API client (retry, rate-limit, streaming
-//! error handling, cost guardrails) is an afternoon of careful work that
-//! deserves its own iteration.
-//!
-//! To enable when implemented: set `ENVS_LLM_ENABLED=1` in the daemon env or
-//! flip `[llm].enabled = true` in `~/.envs/config.toml`.
+//! Opt-in. To enable: `[llm].enabled = true` in `~/.envs/config.toml`, or
+//! `ENVS_LLM_ENABLED=1` in the daemon environment. An `ANTHROPIC_API_KEY`
+//! env var is required when enabled — without it, discovery degrades back
+//! to registry + `--help` parsing only and a warning is logged.
 
 use chrono::{DateTime, Utc};
 use envs_proto::{Confidence, SuggestedBinding};
@@ -101,8 +95,7 @@ pub async fn discover(binary_name: &str, _help_text: &str) -> Vec<SuggestedBindi
         }
     }
 
-    // v0.2: stub. v0.3: real API call.
-    let suggestions = query_llm_stub(binary_name).await;
+    let suggestions = query_anthropic(binary_name, _help_text).await;
     if !suggestions.is_empty() {
         let cached: Vec<CachedSuggestion> = suggestions
             .iter()
@@ -124,10 +117,111 @@ pub async fn discover(binary_name: &str, _help_text: &str) -> Vec<SuggestedBindi
     suggestions
 }
 
-/// v0.2 stub. v0.3 will replace with a real reqwest call to Anthropic API.
-async fn query_llm_stub(_binary_name: &str) -> Vec<SuggestedBinding> {
-    tracing::debug!("LLM discovery is enabled but the API client is a v0.3 task; returning empty");
-    Vec::new()
+/// Call the Anthropic Messages API. Returns empty Vec on any failure
+/// (missing API key, network error, malformed response). Discovery degrades
+/// to registry + `--help` parsing only — never blocks a resolve.
+async fn query_anthropic(binary_name: &str, help_text: &str) -> Vec<SuggestedBinding> {
+    let api_key = match std::env::var("ANTHROPIC_API_KEY") {
+        Ok(k) if !k.trim().is_empty() => k,
+        _ => {
+            tracing::warn!(
+                "LLM discovery is enabled but ANTHROPIC_API_KEY is not set; \
+                 skipping (registry + --help still apply)"
+            );
+            return Vec::new();
+        }
+    };
+
+    // Run the blocking ureq call on a separate thread so we don't stall the
+    // tokio runtime. The API typically responds in 1-3s.
+    let binary_name = binary_name.to_string();
+    let help_excerpt: String = help_text.chars().take(4000).collect();
+    let result =
+        tokio::task::spawn_blocking(move || call_anthropic(&api_key, &binary_name, &help_excerpt))
+            .await;
+    match result {
+        Ok(Ok(parsed)) => parsed,
+        Ok(Err(e)) => {
+            tracing::warn!(error = %e, "LLM discovery API call failed");
+            Vec::new()
+        }
+        Err(join_err) => {
+            tracing::warn!(error = %join_err, "LLM discovery task panicked");
+            Vec::new()
+        }
+    }
+}
+
+/// Synchronous, blocking-thread Anthropic call. Kept tight: one POST,
+/// one JSON parse, no streaming, no retries (cache absorbs retries via TTL).
+fn call_anthropic(
+    api_key: &str,
+    binary_name: &str,
+    help_text: &str,
+) -> Result<Vec<SuggestedBinding>, String> {
+    let user_msg = format!(
+        "What environment variables does the CLI tool `{binary_name}` read?\n\n\
+         Here is its --help output (may be truncated):\n```\n{help_text}\n```\n\n\
+         Respond ONLY with a JSON object of the form:\n\
+         {{\"env_vars\": [{{\"name\": \"FOO_TOKEN\", \"reason\": \"<why>\"}}]}}\n\
+         If the tool reads no environment variables, respond with {{\"env_vars\": []}}.\n\
+         No prose, no markdown fences."
+    );
+    let body = serde_json::json!({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 1024,
+        "messages": [
+            {"role": "user", "content": user_msg}
+        ]
+    });
+
+    let response = ureq::post("https://api.anthropic.com/v1/messages")
+        .set("x-api-key", api_key)
+        .set("anthropic-version", "2023-06-01")
+        .set("content-type", "application/json")
+        .timeout(std::time::Duration::from_secs(15))
+        .send_string(&body.to_string())
+        .map_err(|e| format!("HTTP error: {e}"))?;
+
+    let json: serde_json::Value = response
+        .into_json()
+        .map_err(|e| format!("response parse: {e}"))?;
+    let text = json
+        .pointer("/content/0/text")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "missing /content/0/text in response".to_string())?;
+    let payload: serde_json::Value = serde_json::from_str(text.trim())
+        .map_err(|e| format!("model returned non-JSON: {e}; raw='{text}'"))?;
+    let env_vars = payload
+        .get("env_vars")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "missing env_vars array".to_string())?;
+
+    let mut out = Vec::with_capacity(env_vars.len());
+    for entry in env_vars {
+        let name = entry.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        let reason = entry
+            .get("reason")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Claude")
+            .to_string();
+        if name.is_empty()
+            || !name
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+        {
+            // Skip anything that doesn't look like a real env var name.
+            continue;
+        }
+        out.push(SuggestedBinding {
+            env: name.to_string(),
+            source: format!("rbw://{name}"),
+            confidence: Confidence::Medium,
+            reason: format!("LLM: {reason}"),
+            deprecated: false,
+        });
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -146,5 +240,19 @@ mod tests {
         assert!(is_enabled());
         std::env::remove_var("ENVS_LLM_ENABLED");
         assert!(!is_enabled());
+    }
+
+    /// Enabled but ANTHROPIC_API_KEY missing → log warning and return empty.
+    /// Discovery degrades gracefully so a missing key never blocks resolves.
+    #[tokio::test]
+    async fn enabled_without_api_key_returns_empty() {
+        std::env::set_var("ENVS_LLM_ENABLED", "1");
+        std::env::remove_var("ANTHROPIC_API_KEY");
+        let out = discover("nonexistent-bin", "").await;
+        std::env::remove_var("ENVS_LLM_ENABLED");
+        assert!(
+            out.is_empty(),
+            "expected empty without API key, got {out:?}"
+        );
     }
 }
