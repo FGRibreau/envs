@@ -129,7 +129,7 @@ Download tarballs from [Releases](https://github.com/FGRibreau/envs/releases). T
 git clone https://github.com/FGRibreau/envs.git
 cd envs
 cargo build --release --workspace
-cargo install --path crates/envs-cli --path crates/envs-daemon --path crates/envs-prompt
+for c in cli daemon prompt; do cargo install --path crates/envs-$c; done
 ```
 
 ---
