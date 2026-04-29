@@ -269,6 +269,17 @@ impl Handlers {
         // Conflict detection: same env_var twice with different sources → fail-fast.
         let current_profile =
             compose_profile(&binary_name, project_root, named_profiles, extra_bindings)?;
+
+        // Short-circuit when the helper has nothing to offer — no discovered suggestions,
+        // no profile, no inline --bind. Without this, the popup auto-cancels (stub mode)
+        // or shows an empty list (native mode) and the user sees a misleading
+        // "user cancelled" message. NoProfile maps to `BinaryNotInProfile`, which the
+        // CLI renders as "no profile or registry entry for <bin>" with a hint to
+        // run `envs project init`.
+        if suggested.is_empty() && current_profile.is_none() && extra_bindings.is_empty() {
+            return Err(DaemonError::NoProfile(binary_name));
+        }
+
         let req = PromptRequest {
             request_id: request_id.clone(),
             canon_path: canon_path.to_path_buf(),

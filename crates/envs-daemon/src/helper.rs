@@ -9,6 +9,7 @@
 use crate::error::{DaemonError, Result};
 use envs_proto::{Binding, GrantScope, HelperEvent, HelperReply, ProfileTarget, PromptRequest};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -22,6 +23,9 @@ pub struct HelperHandle {
     sender: Option<tokio::sync::mpsc::UnboundedSender<HelperEvent>>,
     /// Stub mode: skip subprocess, auto-authorize.
     stub: bool,
+    /// Set to true when the supervisor exhausts respawn attempts. New requests
+    /// fail-fast instead of hanging forever on a dead pipeline.
+    degraded: Arc<AtomicBool>,
 }
 
 impl HelperHandle {
@@ -31,6 +35,7 @@ impl HelperHandle {
             pending: Arc::new(Mutex::new(HashMap::new())),
             sender: None,
             stub: true,
+            degraded: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -47,6 +52,8 @@ impl HelperHandle {
         // Respawn supervisor: keeps the helper alive, retrying with exponential backoff
         // up to 3 times in any 30s window.
         let pending_for_supervisor = pending.clone();
+        let degraded = Arc::new(AtomicBool::new(false));
+        let degraded_for_supervisor = degraded.clone();
         let (stdin_tx, mut stdin_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
         tokio::spawn(async move {
             let mut retry_window: Vec<std::time::Instant> = Vec::new();
@@ -56,8 +63,25 @@ impl HelperHandle {
                 retry_window.retain(|t| now.duration_since(*t) < Duration::from_secs(30));
                 if retry_window.len() >= 3 {
                     tracing::error!(
-                        "envs-prompt has crashed 3 times in 30s — degrading to stub-equivalent mode"
+                        "envs-prompt has crashed 3 times in 30s — failing pending requests"
                     );
+                    // Mark the helper as permanently degraded so future request()
+                    // calls fail-fast instead of waiting on a dead pipeline (we
+                    // removed the per-request timeout for Co5).
+                    degraded_for_supervisor.store(true, Ordering::SeqCst);
+                    // Drain in-flight requests with an explicit Error so callers
+                    // do not hang forever.
+                    let mut guard = pending_for_supervisor.lock().await;
+                    let entries: Vec<(String, oneshot::Sender<HelperReply>)> =
+                        guard.drain().collect();
+                    drop(guard);
+                    for (request_id, tx) in entries {
+                        let _ = tx.send(HelperReply::Error {
+                            request_id,
+                            message: "envs-prompt subprocess unavailable (crashed too many times)"
+                                .into(),
+                        });
+                    }
                     break;
                 }
                 retry_window.push(now);
@@ -107,6 +131,7 @@ impl HelperHandle {
             pending,
             sender: Some(tx),
             stub: false,
+            degraded,
         })
     }
 
@@ -198,6 +223,7 @@ impl HelperHandle {
             pending,
             sender: Some(tx),
             stub: false,
+            degraded: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -210,6 +236,12 @@ impl HelperHandle {
     pub async fn request(&self, req: PromptRequest, _timeout: Duration) -> Result<HelperReply> {
         if self.stub {
             return Ok(stub_reply(req));
+        }
+
+        if self.degraded.load(Ordering::SeqCst) {
+            return Err(DaemonError::Helper(
+                "envs-prompt subprocess unavailable (crashed too many times)".into(),
+            ));
         }
 
         let id = req.request_id.clone();

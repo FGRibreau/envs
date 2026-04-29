@@ -66,7 +66,7 @@ async fn start() -> Result<()> {
 
     // Direct spawn
     let envsd = find_envsd().await.ok_or_else(|| {
-        CliError::Internal("envsd not on PATH. Run: cargo install --path crates/envs-daemon".into())
+        CliError::BadArgs("envsd not on PATH. Run: cargo install --path crates/envs-daemon".into())
     })?;
     let log_dir = dirs::home_dir()
         .ok_or_else(|| CliError::Internal("no home dir".into()))?
@@ -150,6 +150,10 @@ async fn stop() -> Result<()> {
 }
 
 async fn status() -> Result<()> {
+    // Status is an assertion: shell scripts (`envs daemon status && ...`) and AI
+    // agents need a non-zero exit when the daemon is down, consistent with
+    // `envs rules list` and every other daemon-bound command. Friendly stderr
+    // formatting is centralized in `error::format_user_error`.
     match client::send_request(&Request::Status).await {
         Ok(Response::Status {
             version,
@@ -168,24 +172,16 @@ async fn status() -> Result<()> {
             println!("  uptime:         {uptime_secs}s");
             Ok(())
         }
-        Ok(other) => {
-            println!("(unexpected response: {other:?})");
-            Ok(())
-        }
-        Err(CliError::DaemonNotRunning) => {
-            println!("✗ daemon not running. Try `envs daemon start` or `envs init`.");
-            Ok(())
-        }
-        Err(e) => {
-            println!("✗ {e}");
-            Ok(())
-        }
+        Ok(other) => Err(CliError::Internal(format!(
+            "unexpected daemon response: {other:?}"
+        ))),
+        Err(e) => Err(e),
     }
 }
 
 async fn install_launch_agent(force: bool) -> Result<()> {
     let envsd = find_envsd().await.ok_or_else(|| {
-        CliError::Internal("envsd not on PATH. Run: cargo install --path crates/envs-daemon".into())
+        CliError::BadArgs("envsd not on PATH. Run: cargo install --path crates/envs-daemon".into())
     })?;
     let home = dirs::home_dir().ok_or_else(|| CliError::Internal("no home dir".into()))?;
     let agents_dir = home.join("Library").join("LaunchAgents");

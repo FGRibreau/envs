@@ -30,18 +30,18 @@ async fn link(to_global: bool, binary: String) -> Result<()> {
     if to_global {
         // Promote project → global
         let pp = project_path.as_ref().ok_or_else(|| {
-            CliError::Internal(
+            CliError::BadArgs(
                 "no project root detected (no .envs/ ancestor) — nothing to promote".into(),
             )
         })?;
         if !pp.is_file() {
-            return Err(CliError::Internal(format!(
+            return Err(CliError::BadArgs(format!(
                 "project profile not found at {}",
                 pp.display()
             )));
         }
         if global_path.exists() {
-            return Err(CliError::Internal(format!(
+            return Err(CliError::BadArgs(format!(
                 "global profile already exists at {} — refusing to overwrite",
                 global_path.display()
             )));
@@ -55,19 +55,19 @@ async fn link(to_global: bool, binary: String) -> Result<()> {
     } else {
         // Demote global → project
         let pp = project_path.ok_or_else(|| {
-            CliError::Internal(
+            CliError::BadArgs(
                 "no project root detected (no .envs/ ancestor) — run `envs project init` first"
                     .into(),
             )
         })?;
         if !global_path.is_file() {
-            return Err(CliError::Internal(format!(
+            return Err(CliError::BadArgs(format!(
                 "global profile not found at {}",
                 global_path.display()
             )));
         }
         if pp.exists() {
-            return Err(CliError::Internal(format!(
+            return Err(CliError::BadArgs(format!(
                 "project profile already exists at {} — refusing to overwrite",
                 pp.display()
             )));

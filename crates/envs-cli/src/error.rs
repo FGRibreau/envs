@@ -32,6 +32,11 @@ pub enum CliError {
     #[error("non-interactive: envs requires an interactive macOS session for TouchID prompts")]
     NonInteractive,
 
+    /// User-facing input/usage error (bad CLI args, missing prereqs the user must fix).
+    /// Rendered without an "internal error:" prefix and exits 64 (EX_USAGE).
+    #[error("{0}")]
+    BadArgs(String),
+
     #[error("{0}")]
     Internal(String),
 }
@@ -44,6 +49,7 @@ impl CliError {
             CliError::NonInteractive => 75,
             CliError::CommandNotFound(_) => 127,
             CliError::NothingToRun => 64, // EX_USAGE
+            CliError::BadArgs(_) => 64,   // EX_USAGE
             CliError::Daemon { code, .. } => match code {
                 ErrorCode::NotAuthorized => 77, // EX_NOPERM (user cancelled)
                 ErrorCode::SystemBinaryRefused => 77,
@@ -86,6 +92,7 @@ pub fn format_user_error(e: &CliError) -> String {
             ),
             _ => format!("envs: {message}"),
         },
+        CliError::BadArgs(msg) => format!("envs: {msg}"),
         CliError::Internal(msg) => format!("envs: internal error: {msg}"),
         _ => format!("envs: {e}"),
     }

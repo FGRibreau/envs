@@ -75,23 +75,23 @@ pub async fn execute(argv: Vec<String>, profiles: &[String], binds: &[String]) -
 }
 
 /// Parse `--bind KEY=rbw://item/field` strings into `Binding` structs.
-/// Errors fail-fast — invalid syntax is a CliError::Internal.
+/// Errors fail-fast — invalid syntax is a `CliError::BadArgs` (user error, exit 64).
 fn parse_bindings(binds: &[String]) -> Result<Vec<Binding>> {
     binds
         .iter()
         .map(|s| {
             let (env, source) = s.split_once('=').ok_or_else(|| {
-                CliError::Internal(format!(
+                CliError::BadArgs(format!(
                     "bad --bind syntax: '{s}' — expected KEY=rbw://item/field"
                 ))
             })?;
             if env.is_empty() {
-                return Err(CliError::Internal(format!(
+                return Err(CliError::BadArgs(format!(
                     "--bind has empty env var name: '{s}'"
                 )));
             }
             if !source.starts_with("rbw://") {
-                return Err(CliError::Internal(format!(
+                return Err(CliError::BadArgs(format!(
                     "--bind source must start with rbw://: '{s}'"
                 )));
             }
