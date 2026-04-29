@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420">
+  <defs>
+    <linearGradient id="envsRowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6366F1" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#A855F7" stop-opacity="0.18"/>
+    </linearGradient>
+    <linearGradient id="monoEnvs" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1E293B" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+
+  <!-- BG -->
+  <rect width="900" height="420" fill="#0F172A" rx="16"/>
+  <rect width="900" height="420" fill="url(#grid)" rx="16" opacity="0.7"/>
+  <path d="M0 30 L0 16 Q0 0 16 0 L30 0" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
+  <path d="M900 30 L900 16 Q900 0 884 0 L870 0" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
+  <path d="M0 390 L0 404 Q0 420 16 420 L30 420" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
+  <path d="M900 390 L900 404 Q900 420 884 420 L870 420" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
+
+  <!-- TITLE -->
+  <text x="450" y="32" text-anchor="middle" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="700" letter-spacing="1">Why not just use…</text>
+  <text x="450" y="50" text-anchor="middle" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11">7 tools, 4 axes that matter — only one is fully green on all four</text>
+
+  <!-- HEADER ROW -->
+  <g transform="translate(50, 78)">
+    <rect width="800" height="36" rx="8" fill="#1E293B" stroke="#334155" stroke-width="1"/>
+    <line x1="0" y1="36" x2="800" y2="36" stroke="#6366F1" stroke-width="1.5"/>
+    <text x="20" y="22" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="700">Tool</text>
+    <text x="320" y="22" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">Consent gate</text>
+    <text x="460" y="22" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">Per-call scope</text>
+    <text x="600" y="22" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">Biometric</text>
+    <text x="740" y="22" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">No plaintext on disk</text>
+  </g>
+
+  <!-- Helper: tokens — defined inline since SVG can't inherit easily. -->
+
+  <!-- envs row (highlighted) -->
+  <g transform="translate(50, 122)">
+    <rect width="800" height="36" rx="8" fill="url(#envsRowGrad)" stroke="#6366F1" stroke-width="1.5"/>
+    <!-- monogram -->
+    <rect x="14" y="8" width="20" height="20" rx="4" fill="url(#monoEnvs)"/>
+    <text x="24" y="22" text-anchor="middle" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="700">e</text>
+    <text x="44" y="22" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="700">envs</text>
+    <text x="92" y="22" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">(this project)</text>
+    <!-- 4 full green discs -->
+    <circle cx="320" cy="18" r="7" fill="#10B981" filter="url(#softGlow)"><animate attributeName="r" values="6;8;6" dur="1.6s" repeatCount="indefinite"/></circle>
+    <circle cx="460" cy="18" r="7" fill="#10B981" filter="url(#softGlow)"><animate attributeName="r" values="6;8;6" dur="1.6s" repeatCount="indefinite" begin="0.15s"/></circle>
+    <circle cx="600" cy="18" r="7" fill="#10B981" filter="url(#softGlow)"><animate attributeName="r" values="6;8;6" dur="1.6s" repeatCount="indefinite" begin="0.3s"/></circle>
+    <circle cx="740" cy="18" r="7" fill="#10B981" filter="url(#softGlow)"><animate attributeName="r" values="6;8;6" dur="1.6s" repeatCount="indefinite" begin="0.45s"/></circle>
+  </g>
+
+  <!-- direnv -->
+  <g transform="translate(50, 166)">
+    <rect width="800" height="32" rx="8" fill="#0B1322" stroke="#1E293B" stroke-width="1"/>
+    <text x="20" y="20" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">direnv</text>
+    <text x="80" y="20" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">+ .envrc</text>
+    <!-- no, no, no, no -->
+    <circle cx="320" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
+    <circle cx="460" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
+    <circle cx="600" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
+    <circle cx="740" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
+  </g>
+
+  <!-- bws run -->
+  <g transform="translate(50, 202)">
+    <rect width="800" height="32" rx="8" fill="#0B1322" stroke="#1E293B" stroke-width="1"/>
+    <text x="20" y="20" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">bws run</text>
+    <text x="92" y="20" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">Bitwarden Secrets Manager (CI-targeted)</text>
+    <circle cx="320" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
+    <circle cx="460" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
+    <circle cx="600" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
+    <!-- Half amber for partial: token still required -->
+    <path d="M 740 10 a 6 6 0 0 1 0 12 z" fill="#F59E0B"/>
+    <circle cx="740" cy="16" r="6" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
+  </g>
+
+  <!-- rbw -->
+  <g transform="translate(50, 238)">
+    <rect width="800" height="32" rx="8" fill="#0B1322" stroke="#1E293B" stroke-width="1"/>
+    <text x="20" y="20" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">rbw</text>
+    <text x="60" y="20" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">standalone (no run subcommand)</text>
+    <circle cx="320" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
+    <circle cx="460" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
+    <!-- Biometric: partial via TouchID-protected pinentry -->
+    <path d="M 600 10 a 6 6 0 0 1 0 12 z" fill="#F59E0B"/>
+    <circle cx="600" cy="16" r="6" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
+    <circle cx="740" cy="16" r="6" fill="#10B981"/>
+  </g>
+
+  <!-- op run -->
+  <g transform="translate(50, 274)">
+    <rect width="800" height="32" rx="8" fill="#0B1322" stroke="#1E293B" stroke-width="1"/>
+    <text x="20" y="20" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">op run</text>
+    <text x="80" y="20" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">1Password — closest functional match, wrong vault</text>
+    <circle cx="320" cy="16" r="6" fill="#10B981"/>
+    <!-- Per-call scope: partial -->
+    <path d="M 460 10 a 6 6 0 0 1 0 12 z" fill="#F59E0B"/>
+    <circle cx="460" cy="16" r="6" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
+    <circle cx="600" cy="16" r="6" fill="#10B981"/>
+    <circle cx="740" cy="16" r="6" fill="#10B981"/>
+  </g>
+
+  <!-- aws-vault -->
+  <g transform="translate(50, 310)">
+    <rect width="800" height="32" rx="8" fill="#0B1322" stroke="#1E293B" stroke-width="1"/>
+    <text x="20" y="20" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">aws-vault exec</text>
+    <text x="125" y="20" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">AWS-only, narrower scope</text>
+    <circle cx="320" cy="16" r="6" fill="#10B981"/>
+    <circle cx="460" cy="16" r="6" fill="#10B981"/>
+    <path d="M 600 10 a 6 6 0 0 1 0 12 z" fill="#F59E0B"/>
+    <circle cx="600" cy="16" r="6" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
+    <circle cx="740" cy="16" r="6" fill="#10B981"/>
+  </g>
+
+  <!-- envwarden / bwsh -->
+  <g transform="translate(50, 346)">
+    <rect width="800" height="32" rx="8" fill="#0B1322" stroke="#1E293B" stroke-width="1"/>
+    <text x="20" y="20" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">envwarden / bwsh</text>
+    <text x="150" y="20" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">non-interactive wrappers</text>
+    <circle cx="320" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
+    <circle cx="460" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
+    <circle cx="600" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
+    <circle cx="740" cy="16" r="6" fill="#10B981"/>
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(50, 386)">
+    <rect width="800" height="22" rx="6" fill="#1E293B" opacity="0.7"/>
+    <circle cx="22" cy="11" r="5" fill="#10B981"/>
+    <text x="35" y="15" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">yes</text>
+    <path d="M 78 5 a 5 5 0 0 1 0 10 z" fill="#F59E0B"/>
+    <circle cx="78" cy="10" r="5" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
+    <text x="92" y="15" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">partial</text>
+    <circle cx="142" cy="11" r="5" fill="none" stroke="#475569" stroke-width="1.5"/>
+    <text x="155" y="15" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">no</text>
+    <text x="780" y="15" text-anchor="end" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-style="italic">macOS · Bitwarden personal vault · ephemeral grants</text>
+  </g>
+</svg>

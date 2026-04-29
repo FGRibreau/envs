@@ -11,5 +11,9 @@ dogfood-output/
 *.log
 conversation.txt
 
+# Internal working docs (not part of the published repo)
+docs/
+specs/
+
 # claude-code worktrees / caches
 .claude/tsc-cache/

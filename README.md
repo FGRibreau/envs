@@ -40,6 +40,8 @@ Then **AI coding agents started running on my machine all day long**. They read 
 - `find ~ -name '*.env*'` to harvest every dotfile-style secret store I forgot I had
 - pipe all of it to a remote server through any of the dozens of HTTP clients already on my PATH
 
+<p align="center"><img src="assets/threat-surface.svg" alt="The threat: AI agents and transitive dependencies running under the same UID can read every plaintext secret on disk and exfiltrate them through any HTTP client on PATH" width="900"/></p>
+
 I'd watched the [`event-stream`](https://snyk.io/blog/malicious-code-found-in-npm-package-event-stream/), [`ua-parser-js`](https://github.com/advisories/GHSA-pjwm-rvh2-c87w), [`xz-utils`](https://research.swtch.com/xz-script), [`shai-hulud`](https://www.wiz.io/blog/shai-hulud-npm-supply-chain-attack) supply-chain attacks roll past one by one. I'd added the obvious guardrails — strict shell history scrubbing, `.gitignore` lints, secret scanners. None of those help when the secret is already decrypted on disk and the malicious code runs as me.
 
 So I asked myself: **what if my secrets simply weren't on this disk in the first place?**
@@ -63,44 +65,23 @@ Once secrets are centralized, two more wins fall out for free:
    - **What** — a specific subset of vault entries (you authorize `CF_API_TOKEN` and `CF_ACCOUNT_ID` for `flarectl`, not the whole vault)
    - **How long** — 1 minute, 5 minutes, 30 minutes, or 1 hour. After that, TouchID again.
 
+   <p align="center"><img src="assets/scope-cube.svg" alt="Each envs grant is a tiny three-axis box (where × what × how long), nested inside the unbounded direnv baseline" width="900"/></p>
+
    This is the concrete implementation of two well-known security principles: **principle of least privilege** (only the env vars that command needs, only inside that project) and **just-in-time / ephemeral credentials** (no standing access — the grant expires automatically). Cloud security folks have preached this for years for production access via tools like HashiCorp Vault and AWS STS; `envs` brings the same model to the developer laptop, where most of us still ran with full standing privileges.
 
 ---
 
 ## How it works
 
-```
-$ cd ~/www/image-charts
-$ envs flarectl zone list
-       │
-       ▼
-   ┌───────────────────────────────────────────────┐
-   │  envs — authorize secret access?               │
-   │                                                │
-   │  Command: flarectl zone list                   │
-   │  Project: ~/www/image-charts                   │
-   │                                                │
-   │  Inject env vars:                              │
-   │   ☑ CF_API_TOKEN ← rbw://CF_API_TOKEN          │
-   │   ☑ CF_ACCOUNT_ID ← rbw://CF_ACCOUNT_ID        │
-   │                                                │
-   │  Scope:    [Any flarectl in image-charts ▼]    │
-   │  Duration: [5 minutes ▼]                       │
-   │  Save as:  [Project profile ▼]                 │
-   │                                                │
-   │            [Cancel] [Authorize via TouchID]    │
-   └───────────────────────────────────────────────┘
-       │ TouchID OK
-       ▼
-   flarectl runs with CF_API_TOKEN + CF_ACCOUNT_ID in its environ.
-   Decision cached: subsequent calls within 5 min skip the popup.
-```
+<p align="center"><img src="assets/popup.svg" alt="The native macOS authorization popup: command + project rows, env-var checkboxes pointing at rbw:// sources, scope and duration dropdowns, and a TouchID button — secrets flow into the child process only after the fingerprint is read" width="900"/></p>
 
 Three Rust binaries cooperate over Unix domain sockets and stdin/stdout pipes: **`envs`** (the CLI wrapper, short-lived), **`envsd`** (the daemon — cache, audit log, rbw client, helper supervisor), and **`envs-prompt`** (the native macOS popup with `objc2-app-kit` + `LAContext`). See [DEVELOPMENT.md](DEVELOPMENT.md) for the architecture.
 
 ---
 
 ## Why not just use…
+
+<p align="center"><img src="assets/comparison-matrix.svg" alt="Feature matrix comparing envs against direnv, bws, rbw, op run, aws-vault, envwarden — only envs is fully green on consent gate, per-call scope, biometric, and no plaintext on disk" width="900"/></p>
 
 | Tool | Why it doesn't fit |
 |---|---|
@@ -190,7 +171,9 @@ See `envs --help` for the full surface (`run`, `init`, `doctor`, `rules`, `proje
 
 ## Security model
 
-`envs` is a **consent gate**, not a sandbox. It guarantees that no secret enters a subprocess without your explicit, biometric-verified authorization. After the grant, the secret is in the child's `environ` and could be read by any other same-UID process — that's a macOS limitation, not an `envs` choice. Read the full threat model in [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md).
+`envs` is a **consent gate**, not a sandbox. It guarantees that no secret enters a subprocess without your explicit, biometric-verified authorization. After the grant, the secret is in the child's `environ` and could be read by any other same-UID process — that's a macOS limitation, not an `envs` choice.
+
+<p align="center"><img src="assets/security-boundary.svg" alt="Security boundary diagram: the green zone (vault → TouchID → child process) is fully gated by envs; the amber zone (sibling same-UID processes able to read the child's environ post-grant) is deliberately out of scope on macOS without paid Apple entitlements" width="900"/></p>
 
 What `envs` defends against:
 - AI agents / scripts running secrets without your knowledge → **TouchID gate**
@@ -230,7 +213,7 @@ Sovereign cloud hosting in France
 
 ## Development
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for build instructions, test commands, code layout, and contribution conventions. The full design + decision log is in [specs/spec.md](specs/spec.md).
+See [DEVELOPMENT.md](DEVELOPMENT.md) for build instructions, test commands, code layout, and contribution conventions.
 
 ---
 
