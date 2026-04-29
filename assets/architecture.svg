@@ -1,0 +1,319 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380">
+  <defs>
+    <!-- ==================== GRADIENTS ==================== -->
+    <linearGradient id="cliGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10B981"/>
+      <stop offset="100%" style="stop-color:#059669"/>
+    </linearGradient>
+    <linearGradient id="daemonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366F1"/>
+      <stop offset="100%" style="stop-color:#4F46E5"/>
+    </linearGradient>
+    <linearGradient id="touchidGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F59E0B"/>
+      <stop offset="100%" style="stop-color:#D97706"/>
+    </linearGradient>
+    <linearGradient id="vaultGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#A855F7"/>
+      <stop offset="100%" style="stop-color:#7C3AED"/>
+    </linearGradient>
+
+    <!-- ==================== FILTERS ==================== -->
+    <filter id="cardGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- ==================== ARROW MARKERS ==================== -->
+    <marker id="arrowIndigo" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6366F1"/>
+    </marker>
+    <marker id="arrowAmber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#F59E0B"/>
+    </marker>
+    <marker id="arrowPurple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#A855F7"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#10B981"/>
+    </marker>
+
+    <!-- ==================== ANIMATED FLOW PATHS ==================== -->
+    <path id="flowResolve"  d="M 240 175 L 290 175" fill="none"/>
+    <path id="flowPrompt"   d="M 430 175 L 480 175" fill="none"/>
+    <path id="flowFetch"    d="M 620 175 L 670 175" fill="none"/>
+    <path id="flowSecrets"  d="M 670 240 C 500 280 350 280 240 240" fill="none"/>
+  </defs>
+
+  <!-- ==================== BACKGROUND ==================== -->
+  <rect width="900" height="380" fill="#0F172A" rx="16"/>
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1E293B" stroke-width="0.5"/>
+  </pattern>
+  <rect width="900" height="380" fill="url(#grid)" rx="16" opacity="0.7"/>
+
+  <!-- Decorative corner accents -->
+  <path d="M0 30 L0 16 Q0 0 16 0 L30 0" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
+  <path d="M900 30 L900 16 Q900 0 884 0 L870 0" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
+  <path d="M0 350 L0 364 Q0 380 16 380 L30 380" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
+  <path d="M900 350 L900 364 Q900 380 884 380 L870 380" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
+
+  <!-- ==================== TITLE ==================== -->
+  <text x="450" y="38" text-anchor="middle" fill="white" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="700" letter-spacing="1">
+    Secrets stay encrypted until you touch the sensor
+  </text>
+  <text x="450" y="56" text-anchor="middle" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11">
+    Per-binary scope, per-project, time-bounded — gated by TouchID, sourced from Bitwarden
+  </text>
+
+  <!-- ==================== CARD 1: CLI WRAPPER ==================== -->
+  <g transform="translate(70, 95)">
+    <rect width="170" height="160" rx="16" fill="url(#cliGrad)" filter="url(#cardGlow)">
+      <animate attributeName="opacity" values="0.92;1;0.92" dur="4s" repeatCount="indefinite"/>
+    </rect>
+
+    <!-- Terminal icon -->
+    <g transform="translate(50, 22)">
+      <rect x="0" y="0" width="70" height="50" rx="6" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+      <!-- prompt $ -->
+      <text x="10" y="22" fill="white" font-family="monospace" font-size="11" font-weight="700">$</text>
+      <!-- typing caret -->
+      <rect x="22" y="14" width="36" height="2" rx="1" fill="white" opacity="0.85">
+        <animate attributeName="width" values="0;36;36" dur="2.4s" repeatCount="indefinite"/>
+      </rect>
+      <text x="20" y="40" fill="white" font-family="monospace" font-size="9" opacity="0.85">flarectl</text>
+      <rect x="58" y="34" width="6" height="10" fill="white" opacity="0.7">
+        <animate attributeName="opacity" values="0.2;0.9;0.2" dur="1s" repeatCount="indefinite"/>
+      </rect>
+    </g>
+
+    <!-- Labels -->
+    <text x="85" y="98" text-anchor="middle" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="700">envs</text>
+    <text x="85" y="115" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">CLI wrapper</text>
+
+    <!-- Pill: wraps any binary -->
+    <g transform="translate(20, 128)">
+      <rect width="130" height="22" rx="11" fill="rgba(255,255,255,0.18)"/>
+      <text x="65" y="15" text-anchor="middle" fill="white" font-family="monospace" font-size="9" font-weight="600">execvpe(child, env)</text>
+    </g>
+  </g>
+
+  <!-- ==================== CARD 2: DAEMON ==================== -->
+  <g transform="translate(290, 95)">
+    <rect width="140" height="160" rx="16" fill="url(#daemonGrad)" filter="url(#cardGlow)">
+      <animate attributeName="opacity" values="0.92;1;0.92" dur="4s" repeatCount="indefinite" begin="0.5s"/>
+    </rect>
+
+    <!-- Server / sockets icon -->
+    <g transform="translate(28, 22)">
+      <rect x="0" y="0" width="84" height="58" rx="6" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+      <!-- LED rows pulsating = active rules / cache -->
+      <g>
+        <circle cx="14" cy="14" r="3.5" fill="#34D399">
+          <animate attributeName="opacity" values="1;0.3;1" dur="1.2s" repeatCount="indefinite"/>
+        </circle>
+        <text x="24" y="17" fill="white" font-family="monospace" font-size="8" font-weight="600">RULES</text>
+      </g>
+      <g transform="translate(0,16)">
+        <circle cx="14" cy="14" r="3.5" fill="#FBBF24">
+          <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite" begin="0.3s"/>
+        </circle>
+        <text x="24" y="17" fill="white" font-family="monospace" font-size="8" font-weight="600">CACHE</text>
+      </g>
+      <g transform="translate(0,32)">
+        <circle cx="14" cy="14" r="3.5" fill="#A78BFA">
+          <animate attributeName="opacity" values="1;0.3;1" dur="1.8s" repeatCount="indefinite" begin="0.6s"/>
+        </circle>
+        <text x="24" y="17" fill="white" font-family="monospace" font-size="8" font-weight="600">AUDIT</text>
+      </g>
+    </g>
+
+    <!-- Labels -->
+    <text x="70" y="105" text-anchor="middle" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="700">envsd</text>
+    <text x="70" y="122" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">daemon</text>
+
+    <!-- Pill: UDS -->
+    <g transform="translate(15, 132)">
+      <rect width="110" height="20" rx="10" fill="rgba(255,255,255,0.18)"/>
+      <text x="55" y="14" text-anchor="middle" fill="white" font-family="monospace" font-size="9" font-weight="600">UDS · mode 0600</text>
+    </g>
+  </g>
+
+  <!-- ==================== CARD 3: TOUCHID PROMPT ==================== -->
+  <g transform="translate(480, 95)">
+    <rect width="140" height="160" rx="16" fill="url(#touchidGrad)" filter="url(#cardGlow)">
+      <animate attributeName="opacity" values="0.92;1;0.92" dur="4s" repeatCount="indefinite" begin="1s"/>
+    </rect>
+
+    <!-- Fingerprint icon -->
+    <g transform="translate(46, 20)" stroke="white" stroke-width="2" fill="none" stroke-linecap="round">
+      <path d="M24 8 C13 8 5 16 5 27 C5 32 6 36 8 40">
+        <animate attributeName="stroke-opacity" values="0.4;1;0.4" dur="1.6s" repeatCount="indefinite"/>
+      </path>
+      <path d="M24 13 C16 13 10 19 10 27 C10 35 12 41 15 46">
+        <animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="1.6s" repeatCount="indefinite" begin="0.15s"/>
+      </path>
+      <path d="M24 18 C18 18 14 22 14 28 C14 36 17 43 21 49">
+        <animate attributeName="stroke-opacity" values="0.6;1;0.6" dur="1.6s" repeatCount="indefinite" begin="0.3s"/>
+      </path>
+      <path d="M24 23 C20 23 18 25 18 29 C18 36 21 43 26 49">
+        <animate attributeName="stroke-opacity" values="0.7;1;0.7" dur="1.6s" repeatCount="indefinite" begin="0.45s"/>
+      </path>
+      <path d="M30 49 C26 43 24 36 24 30">
+        <animate attributeName="stroke-opacity" values="0.8;1;0.8" dur="1.6s" repeatCount="indefinite" begin="0.6s"/>
+      </path>
+      <!-- Scanning sweep -->
+      <line x1="2" y1="5" x2="46" y2="5" stroke="white" stroke-width="2" opacity="0.9">
+        <animate attributeName="y1" values="6;52;6" dur="2.4s" repeatCount="indefinite"/>
+        <animate attributeName="y2" values="6;52;6" dur="2.4s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;0.9;0" dur="2.4s" repeatCount="indefinite"/>
+      </line>
+    </g>
+
+    <!-- Labels -->
+    <text x="70" y="105" text-anchor="middle" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="700">TouchID</text>
+    <text x="70" y="122" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">human-in-the-loop</text>
+
+    <!-- Pill: scope -->
+    <g transform="translate(15, 132)">
+      <rect width="110" height="20" rx="10" fill="rgba(255,255,255,0.22)"/>
+      <text x="55" y="14" text-anchor="middle" fill="white" font-family="monospace" font-size="9" font-weight="600">scope · ttl · save</text>
+    </g>
+  </g>
+
+  <!-- ==================== CARD 4: BITWARDEN VAULT ==================== -->
+  <g transform="translate(670, 95)">
+    <rect width="160" height="160" rx="16" fill="url(#vaultGrad)" filter="url(#cardGlow)">
+      <animate attributeName="opacity" values="0.92;1;0.92" dur="4s" repeatCount="indefinite" begin="1.5s"/>
+    </rect>
+
+    <!-- Shield + lock icon -->
+    <g transform="translate(54, 22)">
+      <path d="M26 0 L52 8 L52 30 C52 44 39 54 26 58 C13 54 0 44 0 30 L0 8 Z" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.5)" stroke-width="1.5">
+        <animate attributeName="stroke-opacity" values="0.4;0.9;0.4" dur="3s" repeatCount="indefinite"/>
+      </path>
+      <!-- lock body -->
+      <rect x="16" y="26" width="20" height="16" rx="3" fill="white" opacity="0.95"/>
+      <!-- shackle -->
+      <path d="M20 26 L20 20 C20 14 32 14 32 20 L32 26" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      <!-- keyhole -->
+      <circle cx="26" cy="32" r="2" fill="#7C3AED"/>
+      <rect x="25" y="33" width="2" height="5" fill="#7C3AED"/>
+    </g>
+
+    <!-- Labels -->
+    <text x="80" y="105" text-anchor="middle" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="700">Bitwarden</text>
+    <text x="80" y="122" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">vault · encrypted at rest</text>
+
+    <!-- Pill: rbw -->
+    <g transform="translate(20, 132)">
+      <rect width="120" height="20" rx="10" fill="rgba(255,255,255,0.18)"/>
+      <text x="60" y="14" text-anchor="middle" fill="white" font-family="monospace" font-size="9" font-weight="600">rbw://item/field</text>
+    </g>
+  </g>
+
+  <!-- ==================== ARROWS ==================== -->
+
+  <!-- 1) CLI -> envsd : Resolve -->
+  <g>
+    <path d="M 240 175 L 285 175" fill="none" stroke="#6366F1" stroke-width="2.5" marker-end="url(#arrowIndigo)"/>
+    <circle r="4" fill="#6366F1" filter="url(#softGlow)">
+      <animateMotion dur="1.5s" repeatCount="indefinite">
+        <mpath href="#flowResolve"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;0" dur="1.5s" repeatCount="indefinite"/>
+    </circle>
+    <text x="262" y="166" text-anchor="middle" fill="#A5B4FC" font-family="monospace" font-size="9" font-weight="600">resolve</text>
+  </g>
+
+  <!-- 2) envsd -> TouchID : Prompt -->
+  <g>
+    <path d="M 430 175 L 475 175" fill="none" stroke="#F59E0B" stroke-width="2.5" marker-end="url(#arrowAmber)"/>
+    <circle r="4" fill="#F59E0B" filter="url(#softGlow)">
+      <animateMotion dur="1.5s" repeatCount="indefinite" begin="0.3s">
+        <mpath href="#flowPrompt"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;0" dur="1.5s" repeatCount="indefinite" begin="0.3s"/>
+    </circle>
+    <text x="452" y="166" text-anchor="middle" fill="#FCD34D" font-family="monospace" font-size="9" font-weight="600">prompt</text>
+  </g>
+
+  <!-- 3) TouchID -> Vault : Fetch (only after auth) -->
+  <g>
+    <path d="M 620 175 L 665 175" fill="none" stroke="#A855F7" stroke-width="2.5" marker-end="url(#arrowPurple)"/>
+    <circle r="4" fill="#A855F7" filter="url(#softGlow)">
+      <animateMotion dur="1.5s" repeatCount="indefinite" begin="0.6s">
+        <mpath href="#flowFetch"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;0" dur="1.5s" repeatCount="indefinite" begin="0.6s"/>
+    </circle>
+    <text x="642" y="166" text-anchor="middle" fill="#D8B4FE" font-family="monospace" font-size="9" font-weight="600">rbw get</text>
+  </g>
+
+  <!-- 4) Vault -> CLI return path: secrets injected -->
+  <g>
+    <path d="M 670 240 C 500 280 350 280 240 240" fill="none" stroke="#10B981" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arrowGreen)" opacity="0.85">
+      <animate attributeName="stroke-dashoffset" values="0;-20" dur="1s" repeatCount="indefinite"/>
+    </path>
+    <circle r="5" fill="#10B981" filter="url(#softGlow)">
+      <animateMotion dur="2.5s" repeatCount="indefinite" begin="1s">
+        <mpath href="#flowSecrets"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="2.5s" repeatCount="indefinite" begin="1s"/>
+    </circle>
+    <text x="450" y="278" text-anchor="middle" fill="#34D399" font-family="monospace" font-size="9" font-weight="600">secrets injected → child process exec()</text>
+  </g>
+
+  <!-- ==================== BOTTOM INFO BAR ==================== -->
+  <g transform="translate(0, 308)">
+    <rect x="50" y="0" width="800" height="55" rx="12" fill="#1E293B" opacity="0.7"/>
+
+    <!-- Per-binary scope -->
+    <g transform="translate(70, 10)">
+      <rect width="160" height="35" rx="8" fill="rgba(16,185,129,0.15)" stroke="#10B981" stroke-width="1"/>
+      <text x="80" y="16" text-anchor="middle" fill="#10B981" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">Least-privilege</text>
+      <text x="80" y="29" text-anchor="middle" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="8">per-binary · per-project</text>
+    </g>
+
+    <!-- Time-bounded -->
+    <g transform="translate(245, 10)">
+      <rect width="160" height="35" rx="8" fill="rgba(245,158,11,0.15)" stroke="#F59E0B" stroke-width="1"/>
+      <circle cx="20" cy="17" r="6" fill="none" stroke="#F59E0B" stroke-width="2">
+        <animate attributeName="r" values="4;7;4" dur="1.8s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="1;0.3;1" dur="1.8s" repeatCount="indefinite"/>
+      </circle>
+      <text x="92" y="16" text-anchor="middle" fill="#F59E0B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">Ephemeral</text>
+      <text x="92" y="29" text-anchor="middle" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="8">1 min · 5 min · 1 hour</text>
+    </g>
+
+    <!-- HMAC audit chain -->
+    <g transform="translate(420, 10)">
+      <rect width="160" height="35" rx="8" fill="rgba(99,102,241,0.15)" stroke="#6366F1" stroke-width="1"/>
+      <g transform="translate(12, 11)">
+        <rect x="0"  y="3" width="5" height="9" rx="1" fill="#6366F1" opacity="0.6"/>
+        <rect x="6"  y="0" width="5" height="14" rx="1" fill="#6366F1" opacity="0.85"/>
+        <rect x="12" y="6" width="5" height="9" rx="1" fill="#6366F1"/>
+      </g>
+      <text x="92" y="16" text-anchor="middle" fill="#A5B4FC" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">Audit chain</text>
+      <text x="92" y="29" text-anchor="middle" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="8">HMAC-SHA256 · tamper-evident</text>
+    </g>
+
+    <!-- No plaintext on disk -->
+    <g transform="translate(595, 10)">
+      <rect width="235" height="35" rx="8" fill="rgba(168,85,247,0.15)" stroke="#A855F7" stroke-width="1"/>
+      <text x="20" y="22" text-anchor="middle" fill="#A855F7" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" font-weight="700">∅</text>
+      <text x="135" y="16" text-anchor="middle" fill="#A855F7" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">Zero plaintext on disk</text>
+      <text x="135" y="29" text-anchor="middle" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="8">no .env, no .envrc, no ~/.aws/credentials</text>
+    </g>
+  </g>
+</svg>

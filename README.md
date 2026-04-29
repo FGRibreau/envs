@@ -13,6 +13,10 @@
 [![CI](https://github.com/FGRibreau/envs/actions/workflows/ci.yml/badge.svg)](https://github.com/FGRibreau/envs/actions/workflows/ci.yml)
 [![Release](https://github.com/FGRibreau/envs/actions/workflows/release.yml/badge.svg)](https://github.com/FGRibreau/envs/actions/workflows/release.yml)
 
+<br/>
+
+<img src="assets/architecture.svg" alt="envs architecture: CLI → daemon → TouchID → Bitwarden vault, with secrets returned ephemerally to the child process" width="900"/>
+
 </div>
 
 ---
