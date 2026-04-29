@@ -1,5 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420">
+  <title>envs vs alternative tools — feature matrix</title>
+  <desc>Seven tools (envs, direnv, bws run, rbw, op run, aws-vault, envwarden) compared on four security axes (consent gate, per-call scope, biometric, no plaintext on disk). Filled green discs with checkmark indicate yes, half-amber discs with tilde indicate partial, empty rings with cross indicate no. Only envs is fully green on all four.</desc>
   <defs>
+    <style><![CDATA[
+      @media (prefers-reduced-motion: reduce) {
+        animate, animateMotion, animateTransform { display: none !important }
+      }
+    ]]></style>
     <linearGradient id="envsRowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#6366F1" stop-opacity="0.18"/>
       <stop offset="100%" stop-color="#A855F7" stop-opacity="0.18"/>
@@ -8,19 +15,25 @@
       <stop offset="0%" stop-color="#6366F1"/>
       <stop offset="100%" stop-color="#A855F7"/>
     </linearGradient>
-    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-      <feMerge>
-        <feMergeNode in="coloredBlur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
       <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1E293B" stroke-width="0.5"/>
     </pattern>
+    <!-- Reusable cell tokens with text glyphs (color-blind safe) -->
+    <symbol id="tokenYes" viewBox="-8 -8 16 16" overflow="visible">
+      <circle cx="0" cy="0" r="7" fill="#10B981"/>
+      <path d="M -3 0 L -1 2 L 3 -2" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="tokenPartial" viewBox="-8 -8 16 16" overflow="visible">
+      <circle cx="0" cy="0" r="7" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
+      <path d="M 0 -7 a 7 7 0 0 1 0 14 z" fill="#F59E0B"/>
+      <path d="M -3 0 Q -1.5 -2 0 0 Q 1.5 2 3 0" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="tokenNo" viewBox="-8 -8 16 16" overflow="visible">
+      <circle cx="0" cy="0" r="7" fill="none" stroke="#475569" stroke-width="1.5"/>
+      <path d="M -3 -3 L 3 3 M 3 -3 L -3 3" fill="none" stroke="#475569" stroke-width="1.5" stroke-linecap="round"/>
+    </symbol>
   </defs>
 
-  <!-- BG -->
   <rect width="900" height="420" fill="#0F172A" rx="16"/>
   <rect width="900" height="420" fill="url(#grid)" rx="16" opacity="0.7"/>
   <path d="M0 30 L0 16 Q0 0 16 0 L30 0" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
@@ -28,122 +41,108 @@
   <path d="M0 390 L0 404 Q0 420 16 420 L30 420" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
   <path d="M900 390 L900 404 Q900 420 884 420 L870 420" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
 
-  <!-- TITLE -->
   <text x="450" y="32" text-anchor="middle" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="700" letter-spacing="1">Why not just use…</text>
-  <text x="450" y="50" text-anchor="middle" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11">7 tools, 4 axes that matter — only one is fully green on all four</text>
+  <text x="450" y="50" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11">7 tools, 4 axes that matter — only one is fully green on all four</text>
 
-  <!-- HEADER ROW -->
+  <!-- header -->
   <g transform="translate(50, 78)">
     <rect width="800" height="36" rx="8" fill="#1E293B" stroke="#334155" stroke-width="1"/>
     <line x1="0" y1="36" x2="800" y2="36" stroke="#6366F1" stroke-width="1.5"/>
-    <text x="20" y="22" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="700">Tool</text>
-    <text x="320" y="22" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">Consent gate</text>
-    <text x="460" y="22" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">Per-call scope</text>
-    <text x="600" y="22" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">Biometric</text>
-    <text x="740" y="22" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">No plaintext on disk</text>
+    <text x="20" y="23" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="700">Tool</text>
+    <text x="320" y="23" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">Consent gate</text>
+    <text x="460" y="23" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">Per-call scope</text>
+    <text x="600" y="23" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">Biometric</text>
+    <text x="740" y="23" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">No plaintext on disk</text>
   </g>
 
-  <!-- Helper: tokens — defined inline since SVG can't inherit easily. -->
-
-  <!-- envs row (highlighted) -->
+  <!-- envs (highlight) -->
   <g transform="translate(50, 122)">
     <rect width="800" height="36" rx="8" fill="url(#envsRowGrad)" stroke="#6366F1" stroke-width="1.5"/>
-    <!-- monogram -->
     <rect x="14" y="8" width="20" height="20" rx="4" fill="url(#monoEnvs)"/>
     <text x="24" y="22" text-anchor="middle" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-weight="700">e</text>
     <text x="44" y="22" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="700">envs</text>
     <text x="92" y="22" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">(this project)</text>
-    <!-- 4 full green discs -->
-    <circle cx="320" cy="18" r="7" fill="#10B981" filter="url(#softGlow)"><animate attributeName="r" values="6;8;6" dur="1.6s" repeatCount="indefinite"/></circle>
-    <circle cx="460" cy="18" r="7" fill="#10B981" filter="url(#softGlow)"><animate attributeName="r" values="6;8;6" dur="1.6s" repeatCount="indefinite" begin="0.15s"/></circle>
-    <circle cx="600" cy="18" r="7" fill="#10B981" filter="url(#softGlow)"><animate attributeName="r" values="6;8;6" dur="1.6s" repeatCount="indefinite" begin="0.3s"/></circle>
-    <circle cx="740" cy="18" r="7" fill="#10B981" filter="url(#softGlow)"><animate attributeName="r" values="6;8;6" dur="1.6s" repeatCount="indefinite" begin="0.45s"/></circle>
+    <use href="#tokenYes" x="320" y="18"><title>Yes — TouchID consent before every cold grant</title></use>
+    <use href="#tokenYes" x="460" y="18"><title>Yes — per-binary, per-project, per-call scope</title></use>
+    <use href="#tokenYes" x="600" y="18"><title>Yes — TouchID via LAContext</title></use>
+    <use href="#tokenYes" x="740" y="18"><title>Yes — only rbw:// pointers stored locally, values stay in the vault</title></use>
   </g>
 
   <!-- direnv -->
   <g transform="translate(50, 166)">
     <rect width="800" height="32" rx="8" fill="#0B1322" stroke="#1E293B" stroke-width="1"/>
     <text x="20" y="20" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">direnv</text>
-    <text x="80" y="20" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">+ .envrc</text>
-    <!-- no, no, no, no -->
-    <circle cx="320" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
-    <circle cx="460" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
-    <circle cx="600" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
-    <circle cx="740" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
+    <text x="80" y="20" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">+ .envrc</text>
+    <use href="#tokenNo" x="320" y="16"><title>No — `direnv allow` is one-shot, not per call</title></use>
+    <use href="#tokenNo" x="460" y="16"><title>No — entire .envrc loaded for every command in the directory</title></use>
+    <use href="#tokenNo" x="600" y="16"><title>No biometric</title></use>
+    <use href="#tokenNo" x="740" y="16"><title>No — values live in plaintext .envrc</title></use>
   </g>
 
   <!-- bws run -->
   <g transform="translate(50, 202)">
     <rect width="800" height="32" rx="8" fill="#0B1322" stroke="#1E293B" stroke-width="1"/>
     <text x="20" y="20" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">bws run</text>
-    <text x="92" y="20" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">Bitwarden Secrets Manager (CI-targeted)</text>
-    <circle cx="320" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
-    <circle cx="460" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
-    <circle cx="600" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
-    <!-- Half amber for partial: token still required -->
-    <path d="M 740 10 a 6 6 0 0 1 0 12 z" fill="#F59E0B"/>
-    <circle cx="740" cy="16" r="6" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
+    <text x="92" y="20" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">Bitwarden Secrets Manager (CI-targeted)</text>
+    <use href="#tokenNo" x="320" y="16"><title>No — non-interactive</title></use>
+    <use href="#tokenNo" x="460" y="16"><title>No — whole project secrets at once</title></use>
+    <use href="#tokenNo" x="600" y="16"><title>No biometric</title></use>
+    <use href="#tokenNo" x="740" y="16"><title>No — BWS_ACCESS_TOKEN must sit in plaintext env or file</title></use>
   </g>
 
   <!-- rbw -->
   <g transform="translate(50, 238)">
     <rect width="800" height="32" rx="8" fill="#0B1322" stroke="#1E293B" stroke-width="1"/>
     <text x="20" y="20" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">rbw</text>
-    <text x="60" y="20" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">standalone (no run subcommand)</text>
-    <circle cx="320" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
-    <circle cx="460" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
-    <!-- Biometric: partial via TouchID-protected pinentry -->
-    <path d="M 600 10 a 6 6 0 0 1 0 12 z" fill="#F59E0B"/>
-    <circle cx="600" cy="16" r="6" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
-    <circle cx="740" cy="16" r="6" fill="#10B981"/>
+    <text x="60" y="20" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">standalone (no run subcommand)</text>
+    <use href="#tokenNo" x="320" y="16"><title>No — no run-and-inject subcommand</title></use>
+    <use href="#tokenNo" x="460" y="16"><title>No — global lock_timeout, not per-call</title></use>
+    <use href="#tokenPartial" x="600" y="16"><title>Partial — TouchID-protected pinentry, but only at unlock</title></use>
+    <use href="#tokenYes" x="740" y="16"><title>Yes — vault stays encrypted on disk</title></use>
   </g>
 
   <!-- op run -->
   <g transform="translate(50, 274)">
     <rect width="800" height="32" rx="8" fill="#0B1322" stroke="#1E293B" stroke-width="1"/>
     <text x="20" y="20" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">op run</text>
-    <text x="80" y="20" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">1Password — closest functional match, wrong vault</text>
-    <circle cx="320" cy="16" r="6" fill="#10B981"/>
-    <!-- Per-call scope: partial -->
-    <path d="M 460 10 a 6 6 0 0 1 0 12 z" fill="#F59E0B"/>
-    <circle cx="460" cy="16" r="6" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
-    <circle cx="600" cy="16" r="6" fill="#10B981"/>
-    <circle cx="740" cy="16" r="6" fill="#10B981"/>
+    <text x="80" y="20" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">1Password — closest functional match, wrong vault</text>
+    <use href="#tokenYes" x="320" y="16"><title>Yes — 1Password CLI consent prompt</title></use>
+    <use href="#tokenPartial" x="460" y="16"><title>Partial — references in .env file, not per call</title></use>
+    <use href="#tokenYes" x="600" y="16"><title>Yes — TouchID via 1Password app</title></use>
+    <use href="#tokenYes" x="740" y="16"><title>Yes — values resolved at runtime from 1Password vault</title></use>
   </g>
 
   <!-- aws-vault -->
   <g transform="translate(50, 310)">
     <rect width="800" height="32" rx="8" fill="#0B1322" stroke="#1E293B" stroke-width="1"/>
     <text x="20" y="20" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">aws-vault exec</text>
-    <text x="125" y="20" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">AWS-only, narrower scope</text>
-    <circle cx="320" cy="16" r="6" fill="#10B981"/>
-    <circle cx="460" cy="16" r="6" fill="#10B981"/>
-    <path d="M 600 10 a 6 6 0 0 1 0 12 z" fill="#F59E0B"/>
-    <circle cx="600" cy="16" r="6" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
-    <circle cx="740" cy="16" r="6" fill="#10B981"/>
+    <text x="125" y="20" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">AWS-only, narrower scope</text>
+    <use href="#tokenYes" x="320" y="16"><title>Yes — Keychain ACL prompt</title></use>
+    <use href="#tokenYes" x="460" y="16"><title>Yes — per-profile STS session</title></use>
+    <use href="#tokenPartial" x="600" y="16"><title>Partial — Keychain ACL can require TouchID</title></use>
+    <use href="#tokenYes" x="740" y="16"><title>Yes — credentials stay in macOS Keychain</title></use>
   </g>
 
   <!-- envwarden / bwsh -->
   <g transform="translate(50, 346)">
     <rect width="800" height="32" rx="8" fill="#0B1322" stroke="#1E293B" stroke-width="1"/>
     <text x="20" y="20" fill="#E2E8F0" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="600">envwarden / bwsh</text>
-    <text x="150" y="20" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">non-interactive wrappers</text>
-    <circle cx="320" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
-    <circle cx="460" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
-    <circle cx="600" cy="16" r="6" fill="none" stroke="#475569" stroke-width="1.5"/>
-    <circle cx="740" cy="16" r="6" fill="#10B981"/>
+    <text x="150" y="20" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">non-interactive wrappers</text>
+    <use href="#tokenNo" x="320" y="16"><title>No — non-interactive</title></use>
+    <use href="#tokenNo" x="460" y="16"><title>No per-call scope</title></use>
+    <use href="#tokenNo" x="600" y="16"><title>No biometric</title></use>
+    <use href="#tokenYes" x="740" y="16"><title>Yes — values stay in the Bitwarden vault</title></use>
   </g>
 
-  <!-- Legend -->
+  <!-- legend -->
   <g transform="translate(50, 386)">
     <rect width="800" height="22" rx="6" fill="#1E293B" opacity="0.7"/>
-    <circle cx="22" cy="11" r="5" fill="#10B981"/>
-    <text x="35" y="15" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">yes</text>
-    <path d="M 78 5 a 5 5 0 0 1 0 10 z" fill="#F59E0B"/>
-    <circle cx="78" cy="10" r="5" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
-    <text x="92" y="15" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">partial</text>
-    <circle cx="142" cy="11" r="5" fill="none" stroke="#475569" stroke-width="1.5"/>
-    <text x="155" y="15" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">no</text>
-    <text x="780" y="15" text-anchor="end" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9" font-style="italic">macOS · Bitwarden personal vault · ephemeral grants</text>
+    <use href="#tokenYes" x="22" y="11"/>
+    <text x="38" y="15" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">yes</text>
+    <use href="#tokenPartial" x="80" y="11"/>
+    <text x="96" y="15" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">partial</text>
+    <use href="#tokenNo" x="148" y="11"/>
+    <text x="164" y="15" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">no</text>
+    <text x="780" y="15" text-anchor="end" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">macOS · Bitwarden personal vault · ephemeral grants</text>
   </g>
 </svg>

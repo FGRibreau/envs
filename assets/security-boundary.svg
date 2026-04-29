@@ -1,5 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320">
+  <title>Where the consent gate ends</title>
+  <desc>The defended zone (left, green dashed border) covers the path from the Bitwarden vault through the TouchID prompt into the child process. The out-of-scope zone (right, amber dashed border) shows that other same-UID processes can still read the child's environ post-grant — a macOS limitation that envs deliberately does not address without paid Apple entitlements.</desc>
   <defs>
+    <style><![CDATA[
+      @media (prefers-reduced-motion: reduce) {
+        animate, animateMotion, animateTransform { display: none !important }
+      }
+    ]]></style>
     <linearGradient id="vaultGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#A855F7"/>
       <stop offset="100%" stop-color="#7C3AED"/>
@@ -12,13 +19,6 @@
       <stop offset="0%" stop-color="#10B981" stop-opacity="0.18"/>
       <stop offset="100%" stop-color="#10B981" stop-opacity="0.05"/>
     </linearGradient>
-    <filter id="cardGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
-      <feMerge>
-        <feMergeNode in="coloredBlur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
     <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
       <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
       <feMerge>
@@ -30,9 +30,17 @@
       <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1E293B" stroke-width="0.5"/>
     </pattern>
     <path id="secretFlow" d="M 110 175 L 290 175 L 460 175" fill="none"/>
+    <symbol id="fingerprintWhite" viewBox="0 0 36 56" overflow="visible">
+      <g stroke="white" stroke-width="2" fill="none" stroke-linecap="round">
+        <path d="M22 6 C12 6 4 13 4 24 C4 28 5 32 7 36"/>
+        <path d="M22 11 C14 11 9 17 9 24 C9 31 11 37 14 42"/>
+        <path d="M22 16 C16 16 13 20 13 25 C13 32 16 39 20 45"/>
+        <path d="M22 21 C18 21 17 23 17 27 C17 33 20 39 24 45"/>
+        <path d="M28 45 C25 39 23 33 23 27"/>
+      </g>
+    </symbol>
   </defs>
 
-  <!-- BG -->
   <rect width="900" height="320" fill="#0F172A" rx="16"/>
   <rect width="900" height="320" fill="url(#grid)" rx="16" opacity="0.7"/>
   <path d="M0 30 L0 16 Q0 0 16 0 L30 0" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
@@ -40,17 +48,16 @@
   <path d="M0 290 L0 304 Q0 320 16 320 L30 320" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
   <path d="M900 290 L900 304 Q900 320 884 320 L870 320" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
 
-  <!-- TITLE -->
   <text x="450" y="32" text-anchor="middle" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="700" letter-spacing="1">Where the consent gate ends</text>
-  <text x="450" y="50" text-anchor="middle" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11">envs is a consent gate, not a sandbox — same-UID exfiltration is out of scope on macOS</text>
+  <text x="450" y="50" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11">envs is a consent gate, not a sandbox — same-UID exfiltration is out of scope on macOS</text>
 
-  <!-- ==================== GREEN GRANTED ZONE ==================== -->
-  <rect x="50" y="80" width="500" height="180" rx="14" fill="url(#grantedZone)" stroke="#10B981" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <!-- defended zone (50 → 555 = 505 wide; UID boundary midpoint at 567) -->
+  <rect x="50" y="80" width="505" height="180" rx="14" fill="url(#grantedZone)" stroke="#10B981" stroke-width="1.5" stroke-dasharray="4,4"/>
   <text x="68" y="98" fill="#34D399" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="700">DEFENDED — only this path is gated</text>
 
-  <!-- VAULT (left of zone) -->
+  <!-- vault -->
   <g transform="translate(70, 130)">
-    <rect width="80" height="80" rx="12" fill="url(#vaultGrad)" filter="url(#cardGlow)"/>
+    <rect width="80" height="80" rx="12" fill="url(#vaultGrad)"/>
     <g transform="translate(22, 12)">
       <path d="M18 0 L36 6 L36 22 C36 32 27 39 18 42 C9 39 0 32 0 22 L0 6 Z" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.5)" stroke-width="1.2"/>
       <rect x="11" y="20" width="14" height="12" rx="2" fill="white"/>
@@ -59,83 +66,62 @@
     <text x="40" y="68" text-anchor="middle" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600">Vault</text>
   </g>
 
-  <!-- TOUCHID GATE (center of zone) -->
+  <!-- TouchID gate -->
   <g transform="translate(250, 130)">
-    <rect width="80" height="80" rx="12" fill="url(#touchidGrad)" filter="url(#cardGlow)"/>
-    <g transform="translate(28, 14)" stroke="white" stroke-width="2" fill="none" stroke-linecap="round">
-      <path d="M12 4 C7 4 3 8 3 14 C3 17 4 20 5 22"><animate attributeName="stroke-opacity" values="0.5;1;0.5" dur="1.6s" repeatCount="indefinite"/></path>
-      <path d="M12 8 C8 8 6 11 6 15 C6 19 7 22 9 25"><animate attributeName="stroke-opacity" values="0.6;1;0.6" dur="1.6s" repeatCount="indefinite" begin="0.15s"/></path>
-      <path d="M12 12 C9 12 8 14 8 17 C8 21 10 24 12 26"><animate attributeName="stroke-opacity" values="0.7;1;0.7" dur="1.6s" repeatCount="indefinite" begin="0.3s"/></path>
-      <path d="M16 26 C13 22 12 19 12 16"><animate attributeName="stroke-opacity" values="0.85;1;0.85" dur="1.6s" repeatCount="indefinite" begin="0.45s"/></path>
+    <rect width="80" height="80" rx="12" fill="url(#touchidGrad)"/>
+    <g transform="translate(22, 14)">
+      <use href="#fingerprintWhite" width="36" height="56"/>
     </g>
     <text x="40" y="68" text-anchor="middle" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="600">TouchID</text>
   </g>
 
-  <!-- CHILD PROCESS (right side of zone) -->
+  <!-- child process -->
   <g transform="translate(430, 130)">
-    <rect width="100" height="80" rx="12" fill="#1E293B" stroke="#10B981" stroke-width="1.5" filter="url(#cardGlow)"/>
+    <rect width="100" height="80" rx="12" fill="#1E293B" stroke="#10B981" stroke-width="1.5"/>
     <text x="50" y="22" text-anchor="middle" fill="#E2E8F0" font-family="monospace" font-size="10" font-weight="600">flarectl</text>
     <text x="50" y="38" text-anchor="middle" fill="#10B981" font-family="monospace" font-size="9">CF_API_TOKEN ✓</text>
     <text x="50" y="52" text-anchor="middle" fill="#10B981" font-family="monospace" font-size="9">CF_ACCOUNT_ID ✓</text>
     <text x="50" y="70" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="9">child process</text>
   </g>
 
-  <!-- Arrows inside the zone -->
+  <!-- arrows inside the zone -->
   <path d="M 155 170 L 245 170" stroke="#10B981" stroke-width="2" fill="none" opacity="0.7"/>
   <path d="M 240 165 L 250 170 L 240 175" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M 335 170 L 425 170" stroke="#10B981" stroke-width="2" fill="none" opacity="0.7"/>
   <path d="M 420 165 L 430 170 L 420 175" fill="none" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- Secret particles flowing from vault → child -->
+  <!-- single secret particle -->
   <circle r="4" fill="#10B981" filter="url(#softGlow)">
-    <animateMotion dur="2.4s" repeatCount="indefinite">
-      <mpath href="#secretFlow"/>
-    </animateMotion>
-    <animate attributeName="opacity" values="0;1;1;0" dur="2.4s" repeatCount="indefinite"/>
-  </circle>
-  <circle r="4" fill="#10B981" filter="url(#softGlow)">
-    <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.8s">
-      <mpath href="#secretFlow"/>
-    </animateMotion>
-    <animate attributeName="opacity" values="0;1;1;0" dur="2.4s" repeatCount="indefinite" begin="0.8s"/>
+    <animateMotion dur="3s" repeatCount="indefinite"><mpath href="#secretFlow"/></animateMotion>
+    <animate attributeName="opacity" values="0;1;1;0" dur="3s" repeatCount="indefinite"/>
   </circle>
 
-  <!-- ==================== UID BOUNDARY (vertical dashed line) ==================== -->
-  <line x1="565" y1="85" x2="565" y2="285" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="6,5" opacity="0.7"/>
-  <text x="565" y="78" text-anchor="middle" fill="#FCD34D" font-family="monospace" font-size="9" font-weight="700">macOS UID boundary</text>
+  <!-- UID boundary (centered between zones at x=572) -->
+  <line x1="572" y1="85" x2="572" y2="285" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="6,5" opacity="0.7"/>
+  <text x="572" y="78" text-anchor="middle" fill="#FCD34D" font-family="monospace" font-size="9" font-weight="700">macOS UID boundary</text>
 
-  <!-- ==================== AMBER OUT-OF-SCOPE ZONE ==================== -->
-  <rect x="580" y="80" width="270" height="180" rx="14" fill="rgba(245,158,11,0.06)" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="4,4"/>
-  <text x="598" y="98" fill="#FCD34D" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="700">OUT OF SCOPE — same UID, same access</text>
+  <!-- out-of-scope zone (590 → 850) -->
+  <rect x="590" y="80" width="260" height="180" rx="14" fill="rgba(245,158,11,0.06)" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <text x="608" y="98" fill="#FCD34D" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10" font-weight="700">OUT OF SCOPE — same UID, same access</text>
 
-  <!-- 3 sibling processes peeking over the fence -->
-  <g transform="translate(605, 125)">
-    <rect width="76" height="40" rx="8" fill="rgba(245,158,11,0.10)" stroke="#F59E0B" stroke-width="1"/>
-    <text x="38" y="16" text-anchor="middle" fill="#FCD34D" font-family="monospace" font-size="9" font-weight="600">agent-X</text>
-    <text x="38" y="30" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">printenv</text>
+  <!-- 2 sibling processes (reduced from 4 — two examples make the point) -->
+  <g transform="translate(615, 125)">
+    <rect width="100" height="50" rx="8" fill="rgba(245,158,11,0.10)" stroke="#F59E0B" stroke-width="1"/>
+    <text x="50" y="20" text-anchor="middle" fill="#FCD34D" font-family="monospace" font-size="10" font-weight="600">agent-X</text>
+    <text x="50" y="36" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="9">printenv $pid</text>
   </g>
-  <g transform="translate(693, 125)">
-    <rect width="76" height="40" rx="8" fill="rgba(245,158,11,0.10)" stroke="#F59E0B" stroke-width="1"/>
-    <text x="38" y="16" text-anchor="middle" fill="#FCD34D" font-family="monospace" font-size="9" font-weight="600">npx tool</text>
-    <text x="38" y="30" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">/proc/$pid</text>
-  </g>
-  <g transform="translate(605, 175)">
-    <rect width="76" height="40" rx="8" fill="rgba(245,158,11,0.10)" stroke="#F59E0B" stroke-width="1"/>
-    <text x="38" y="16" text-anchor="middle" fill="#FCD34D" font-family="monospace" font-size="9" font-weight="600">other shell</text>
-    <text x="38" y="30" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">ps eww</text>
-  </g>
-  <g transform="translate(693, 175)">
-    <rect width="76" height="40" rx="8" fill="rgba(245,158,11,0.10)" stroke="#F59E0B" stroke-width="1"/>
-    <text x="38" y="16" text-anchor="middle" fill="#FCD34D" font-family="monospace" font-size="9" font-weight="600">debugger</text>
-    <text x="38" y="30" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">read /proc</text>
+  <g transform="translate(725, 125)">
+    <rect width="100" height="50" rx="8" fill="rgba(245,158,11,0.10)" stroke="#F59E0B" stroke-width="1"/>
+    <text x="50" y="20" text-anchor="middle" fill="#FCD34D" font-family="monospace" font-size="10" font-weight="600">npx tool</text>
+    <text x="50" y="36" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="9">read /proc</text>
   </g>
 
-  <text x="715" y="240" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">post-grant, secrets sit in the child's environ</text>
-  <text x="715" y="252" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">— sandbox would need paid Apple entitlements</text>
+  <text x="720" y="210" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">post-grant, secrets sit in the child's environ</text>
+  <text x="720" y="226" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">— sandboxing requires paid Apple entitlements</text>
 
-  <!-- BOTTOM CAPTION -->
+  <!-- bottom caption -->
   <g transform="translate(0, 280)">
     <rect x="50" y="0" width="800" height="28" rx="8" fill="#1E293B" opacity="0.6"/>
-    <text x="450" y="18" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">consent + scope + ephemerality covered · same-UID hardening deliberately deferred (would require entitlements)</text>
+    <text x="450" y="18" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">consent + scope + ephemerality covered · same-UID hardening deliberately deferred</text>
   </g>
 </svg>

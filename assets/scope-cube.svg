@@ -1,5 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360">
+  <title>Each grant lives in a tiny three-axis box</title>
+  <desc>Each envs grant is a small green cube bounded on three axes — binary path (where), env-var subset (what), and TTL of 1m, 5m, 30m, or 1h (how long) — nested inside the unbounded direnv baseline drawn as a faint dashed wireframe. A countdown bar shows the grant expiring automatically.</desc>
   <defs>
+    <style><![CDATA[
+      @media (prefers-reduced-motion: reduce) {
+        animate, animateMotion, animateTransform { display: none !important }
+      }
+    ]]></style>
     <linearGradient id="grantedFace" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#10B981" stop-opacity="0.85"/>
       <stop offset="100%" stop-color="#059669" stop-opacity="0.85"/>
@@ -12,19 +19,11 @@
       <stop offset="0%" stop-color="#059669"/>
       <stop offset="100%" stop-color="#047857"/>
     </linearGradient>
-    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-      <feMerge>
-        <feMergeNode in="coloredBlur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
       <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1E293B" stroke-width="0.5"/>
     </pattern>
   </defs>
 
-  <!-- BACKGROUND -->
   <rect width="900" height="360" fill="#0F172A" rx="16"/>
   <rect width="900" height="360" fill="url(#grid)" rx="16" opacity="0.7"/>
   <path d="M0 30 L0 16 Q0 0 16 0 L30 0" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
@@ -32,21 +31,23 @@
   <path d="M0 330 L0 344 Q0 360 16 360 L30 360" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
   <path d="M900 330 L900 344 Q900 360 884 360 L870 360" fill="none" stroke="#6366F1" stroke-width="2" opacity="0.3"/>
 
-  <!-- TITLE -->
   <text x="450" y="32" text-anchor="middle" fill="white" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="16" font-weight="700" letter-spacing="1">Each grant lives in a tiny three-axis box</text>
-  <text x="450" y="50" text-anchor="middle" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11">least-privilege + just-in-time, applied to a developer laptop</text>
+  <text x="450" y="50" text-anchor="middle" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11">least-privilege + just-in-time, applied to a developer laptop</text>
 
-  <!-- ==================== ISO CUBE (LEFT) ==================== -->
-  <!-- direnv outer "box" — engulfing everything, drawn first -->
-  <g transform="translate(140, 90)" opacity="0.25">
-    <!-- back/top edges only as wireframe -->
-    <polygon points="0,180 100,235 360,235 260,180" fill="none" stroke="#EF4444" stroke-width="1" stroke-dasharray="3,3"/>
-    <polygon points="0,180 0,40 260,40 260,180" fill="none" stroke="#EF4444" stroke-width="1" stroke-dasharray="3,3"/>
-    <polygon points="260,40 260,180 360,235 360,95" fill="none" stroke="#EF4444" stroke-width="1" stroke-dasharray="3,3"/>
+  <!-- direnv outer wireframe (consistent isometric: bottom 0,180 → 240,180 → 320,140 → 80,140) -->
+  <g transform="translate(140, 90)" opacity="0.45">
+    <!-- bottom face (dashed) -->
+    <polygon points="0,180 240,180 320,140 80,140" fill="none" stroke="#EF4444" stroke-width="1" stroke-dasharray="4,3"/>
+    <!-- front face -->
+    <polygon points="0,180 240,180 240,40 0,40" fill="none" stroke="#EF4444" stroke-width="1" stroke-dasharray="4,3"/>
+    <!-- right face -->
+    <polygon points="240,180 320,140 320,0 240,40" fill="none" stroke="#EF4444" stroke-width="1" stroke-dasharray="4,3"/>
+    <!-- top face (visible top edges only) -->
+    <polygon points="0,40 240,40 320,0 80,0" fill="none" stroke="#EF4444" stroke-width="1" stroke-dasharray="4,3"/>
   </g>
-  <text x="320" y="320" fill="#EF4444" font-family="monospace" font-size="10" opacity="0.7">direnv: any binary · all vars · forever</text>
+  <text x="170" y="313" fill="#FCA5A5" font-family="monospace" font-size="10" font-weight="600">✗ direnv: any binary · all vars · forever</text>
 
-  <!-- envs grant: small solid cube inside the wireframe -->
+  <!-- envs grant: small solid cube nested inside the wireframe -->
   <g transform="translate(140, 90)">
     <!-- Front face -->
     <polygon points="20,180 20,140 90,140 90,180" fill="url(#grantedFace)" stroke="#10B981" stroke-width="1.5"/>
@@ -54,48 +55,12 @@
     <polygon points="20,140 50,120 120,120 90,140" fill="url(#grantedFaceTop)" stroke="#10B981" stroke-width="1.5"/>
     <!-- Right face -->
     <polygon points="90,180 90,140 120,120 120,160" fill="url(#grantedFaceSide)" stroke="#10B981" stroke-width="1.5"/>
-    <!-- Inner labels -->
     <text x="55" y="166" text-anchor="middle" fill="white" font-family="monospace" font-size="9" font-weight="700">flarectl</text>
-    <text x="55" y="178" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="monospace" font-size="8">CF_API_TOKEN</text>
-    <!-- Pulsing aura -->
-    <polygon points="20,180 20,140 50,120 120,120 120,160 90,180" fill="none" stroke="#10B981" stroke-width="3" opacity="0.4">
-      <animate attributeName="opacity" values="0.2;0.6;0.2" dur="2.4s" repeatCount="indefinite"/>
-    </polygon>
+    <text x="55" y="178" text-anchor="middle" fill="rgba(255,255,255,0.95)" font-family="monospace" font-size="8">CF_API_TOKEN</text>
   </g>
 
-  <!-- AXES on top of cube -->
-  <g transform="translate(140, 90)" font-family="monospace" font-size="9" fill="#94A3B8">
-    <!-- WHERE axis (front/right) -->
-    <line x1="20" y1="220" x2="260" y2="220" stroke="#6366F1" stroke-width="1.5"/>
-    <path d="M 254 215 L 260 220 L 254 225" fill="none" stroke="#6366F1" stroke-width="1.5"/>
-    <text x="140" y="238" text-anchor="middle" fill="#A5B4FC">WHERE — binary path</text>
-    <!-- 4 ticks, only 1st within grant -->
-    <line x1="55" y1="216" x2="55" y2="224" stroke="#6366F1" stroke-width="1"/>
-    <line x1="115" y1="216" x2="115" y2="224" stroke="#475569" stroke-width="1"/>
-    <line x1="175" y1="216" x2="175" y2="224" stroke="#475569" stroke-width="1"/>
-    <line x1="235" y1="216" x2="235" y2="224" stroke="#475569" stroke-width="1"/>
-
-    <!-- HOW LONG axis (vertical) -->
-    <line x1="0" y1="180" x2="0" y2="60" stroke="#F59E0B" stroke-width="1.5"/>
-    <path d="M -5 66 L 0 60 L 5 66" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
-    <text x="-110" y="130" fill="#FCD34D">HOW LONG — TTL</text>
-    <line x1="-4" y1="170" x2="4" y2="170" stroke="#F59E0B" stroke-width="1"/>
-    <line x1="-4" y1="140" x2="4" y2="140" stroke="#F59E0B" stroke-width="1"/>
-    <line x1="-4" y1="100" x2="4" y2="100" stroke="#475569" stroke-width="1"/>
-    <line x1="-4" y1="70" x2="4" y2="70" stroke="#475569" stroke-width="1"/>
-    <text x="-30" y="174" text-anchor="end" fill="#94A3B8">1m</text>
-    <text x="-30" y="144" text-anchor="end" fill="#FCD34D">5m</text>
-    <text x="-30" y="104" text-anchor="end" fill="#94A3B8">30m</text>
-    <text x="-30" y="74" text-anchor="end" fill="#94A3B8">1h</text>
-
-    <!-- WHAT axis (depth, going up-right into iso) -->
-    <line x1="20" y1="180" x2="100" y2="130" stroke="#A855F7" stroke-width="1.5"/>
-    <path d="M 96 124 L 100 130 L 92 130" fill="none" stroke="#A855F7" stroke-width="1.5"/>
-    <text x="55" y="115" fill="#D8B4FE">WHAT — env vars</text>
-  </g>
-
-  <!-- TTL countdown bar inside the cube — animated shrink -->
-  <g transform="translate(220, 195)">
+  <!-- TTL countdown bar inside the cube -->
+  <g transform="translate(360, 195)">
     <rect width="80" height="6" rx="3" fill="#0B1322" stroke="#F59E0B" stroke-width="1" opacity="0.7"/>
     <rect width="80" height="6" rx="3" fill="#F59E0B">
       <animate attributeName="width" values="80;0;80" dur="3s" repeatCount="indefinite"/>
@@ -104,31 +69,23 @@
     <text x="40" y="-4" text-anchor="middle" fill="#FCD34D" font-family="monospace" font-size="9" font-weight="600">5:00 → 0:00</text>
   </g>
 
-  <!-- ==================== RIGHT-SIDE EXPLAINER PANELS ==================== -->
-  <!-- WHERE -->
+  <!-- Right-side explainer panels (cube alone is too abstract; panels carry the semantics) -->
   <g transform="translate(530, 100)">
     <rect width="320" height="62" rx="10" fill="rgba(99,102,241,0.10)" stroke="#6366F1" stroke-width="1"/>
     <text x="20" y="22" fill="#A5B4FC" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700">Where</text>
     <text x="20" y="40" fill="#E2E8F0" font-family="monospace" font-size="10">/opt/homebrew/bin/flarectl</text>
-    <text x="20" y="54" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">inside ~/www/image-charts/ — detected via .envs/</text>
+    <text x="20" y="54" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">inside ~/www/image-charts/ — detected via .envs/</text>
   </g>
-  <!-- WHAT -->
   <g transform="translate(530, 175)">
     <rect width="320" height="62" rx="10" fill="rgba(168,85,247,0.10)" stroke="#A855F7" stroke-width="1"/>
     <text x="20" y="22" fill="#D8B4FE" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700">What</text>
     <text x="20" y="40" fill="#E2E8F0" font-family="monospace" font-size="10">CF_API_TOKEN, CF_ACCOUNT_ID</text>
-    <text x="20" y="54" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">a chosen subset of the vault, never the whole thing</text>
+    <text x="20" y="54" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">a chosen subset of the vault, never the whole thing</text>
   </g>
-  <!-- HOW LONG -->
   <g transform="translate(530, 250)">
     <rect width="320" height="62" rx="10" fill="rgba(245,158,11,0.10)" stroke="#F59E0B" stroke-width="1"/>
     <text x="20" y="22" fill="#FCD34D" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700">How long</text>
     <text x="20" y="40" fill="#E2E8F0" font-family="monospace" font-size="10">1 min · 5 min · 30 min · 1 hour</text>
-    <text x="20" y="54" fill="#64748B" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">grant expires automatically — TouchID again, or nothing</text>
-    <!-- Pulse ring -->
-    <circle cx="295" cy="31" r="6" fill="none" stroke="#F59E0B" stroke-width="2">
-      <animate attributeName="r" values="4;9;4" dur="1.8s" repeatCount="indefinite"/>
-      <animate attributeName="opacity" values="1;0.3;1" dur="1.8s" repeatCount="indefinite"/>
-    </circle>
+    <text x="20" y="54" fill="#94A3B8" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="10">grant expires automatically — TouchID again, or nothing</text>
   </g>
 </svg>
