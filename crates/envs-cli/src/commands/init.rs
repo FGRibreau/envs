@@ -1,95 +1,100 @@
-//! `envs init` — bootstrap wizard (idempotent, rejouable).
+//! `envs init` — bootstrap wizard. Idempotent: re-runs cleanly when everything
+//! is already in place. Auto-installs missing prerequisites via Homebrew rather
+//! than refusing to proceed (a wizard's job is to install, not to lecture).
 
 use crate::error::{CliError, Result};
+use std::process::Stdio;
 use tokio::process::Command;
 
 pub async fn execute(force: bool) -> Result<()> {
     println!("envs setup wizard\n");
 
-    println!("[1/6] Checking rbw...");
-    let rbw_ok = Command::new("rbw")
-        .arg("--version")
-        .output()
-        .await
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    if rbw_ok {
-        println!("  ✓ rbw is installed");
-    } else {
-        println!("  ✗ rbw is not installed");
-        println!("  → Run: brew install rbw");
-        println!("  (This wizard does not auto-install brew packages — run the brew command yourself, then re-run `envs init`.)");
-        return Ok(());
-    }
-
-    println!("\n[2/6] Checking rbw login state...");
-    let logged_in = Command::new("rbw")
-        .arg("config")
-        .arg("show")
-        .output()
-        .await
-        .map(|o| o.status.success() && !o.stdout.is_empty())
-        .unwrap_or(false);
-    if logged_in && !force {
-        println!("  ✓ rbw is configured");
-    } else {
-        println!("  ! rbw is not configured (or --force was used)");
-        println!("  → Run: rbw config set email <your-email>");
-        println!("  → Then: rbw login");
-    }
-
-    println!("\n[3/6] Checking pinentry-touchid...");
-    // pinentry-touchid is a hard prerequisite: envs auto-locks rbw between
-    // resolves and re-unlocks it on demand. Without pinentry-touchid the user
-    // would type their master password at every cold call — defeats the UX.
-    let pinentry_ok = Command::new("pinentry-touchid")
-        .arg("--version")
-        .output()
-        .await
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    if !pinentry_ok {
-        println!("  ✗ pinentry-touchid is not installed");
-        println!("  → Run: brew install jorgelbg/tap/pinentry-touchid");
-        println!("  → Then: rbw config set pinentry pinentry-touchid");
-        println!("  (envs auto-locks rbw between resolves; without pinentry-touchid every cold call asks for your master password)");
+    println!("[1/6] Checking Homebrew...");
+    if !brew_available().await {
         return Err(CliError::BadArgs(
-            "pinentry-touchid is required — install it then re-run `envs init`".into(),
+            "Homebrew is required to install rbw + pinentry-touchid. \
+             Install brew first: https://brew.sh"
+                .into(),
         ));
     }
-    println!("  ✓ pinentry-touchid is installed");
-    let pinentry_configured = Command::new("rbw")
+    println!("  ✓ brew is available");
+
+    println!("\n[2/6] rbw (Bitwarden CLI backend)...");
+    ensure_brew_pkg("rbw", "rbw").await?;
+    let rbw_version = Command::new("rbw")
+        .arg("--version")
+        .output()
+        .await
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    println!("  ✓ {rbw_version}");
+
+    println!("\n[3/6] pinentry-touchid (TouchID-gated unlock)...");
+    ensure_brew_pkg("pinentry-touchid", "jorgelbg/tap/pinentry-touchid").await?;
+    let pinentry_version = Command::new("pinentry-touchid")
+        .arg("--version")
+        .output()
+        .await
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|_| "pinentry-touchid".into());
+    println!("  ✓ {pinentry_version}");
+    // Bind rbw to pinentry-touchid (idempotent).
+    let _ = Command::new("rbw")
+        .arg("config")
+        .arg("set")
+        .arg("pinentry")
+        .arg("pinentry-touchid")
+        .output()
+        .await;
+    println!("  ✓ rbw configured to use pinentry-touchid");
+
+    println!("\n[4/6] rbw login state...");
+    let configured = Command::new("rbw")
         .arg("config")
         .arg("show")
         .output()
         .await
         .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .any(|l| l.trim().starts_with("pinentry") && l.contains("pinentry-touchid"))
+            o.status.success()
+                && String::from_utf8_lossy(&o.stdout)
+                    .lines()
+                    .any(|l| l.trim().starts_with("email") && l.contains('@'))
         })
         .unwrap_or(false);
-    if pinentry_configured {
-        println!("  ✓ rbw is configured to use pinentry-touchid");
+    if configured && !force {
+        println!("  ✓ rbw email is configured");
     } else {
-        println!("  ! rbw is not configured to use pinentry-touchid");
-        println!("  → Run: rbw config set pinentry pinentry-touchid");
-        return Err(CliError::BadArgs(
-            "rbw must be configured to use pinentry-touchid — see `envs doctor`".into(),
-        ));
-    }
-
-    println!("\n[4/6] Checking rbw unlock state...");
-    let unlocked = Command::new("rbw")
-        .arg("unlocked")
-        .status()
-        .await
-        .map(|s| s.success())
-        .unwrap_or(false);
-    if unlocked {
-        println!("  ✓ vault is unlocked (envs will lock it again after each resolve)");
-    } else {
-        println!("  ! vault is locked (envs will auto-unlock on the first call)");
+        let email = prompt_line("  Bitwarden email > ")?;
+        let out = Command::new("rbw")
+            .arg("config")
+            .arg("set")
+            .arg("email")
+            .arg(&email)
+            .output()
+            .await
+            .map_err(|e| CliError::Internal(format!("rbw config set email: {e}")))?;
+        if !out.status.success() {
+            return Err(CliError::Internal(format!(
+                "rbw config set email failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            )));
+        }
+        println!("  ✓ email set to {email}");
+        println!("  → Running `rbw login` (will prompt for your master password)...");
+        let status = Command::new("rbw")
+            .arg("login")
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .await
+            .map_err(|e| CliError::Internal(format!("rbw login: {e}")))?;
+        if !status.success() {
+            return Err(CliError::BadArgs(
+                "rbw login failed — re-run `envs init` once you have your master password".into(),
+            ));
+        }
+        println!("  ✓ rbw login successful");
     }
 
     println!("\n[5/6] LaunchAgent for envsd...");
@@ -112,10 +117,64 @@ pub async fn execute(force: bool) -> Result<()> {
         Err(e) => println!("  ! {e} (you can run `envs registry sync` later)"),
     }
 
-    println!("\nSetup complete. Next steps:");
-    println!("  - The envsd daemon should be running (check: envs daemon status)");
-    println!("  - Try: envs flarectl --help (or any tool you've authorized)");
+    println!("\nSetup complete. envs auto-locks rbw between every resolve;");
+    println!("the first cold call will trigger pinentry-touchid (TouchID).");
+    println!("Try: envs daemon status");
     Ok(())
+}
+
+/// Probe `brew --version`. Network-free.
+async fn brew_available() -> bool {
+    Command::new("brew")
+        .arg("--version")
+        .output()
+        .await
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Run `brew install <pkg>` if `<bin>` is not on PATH. Streams brew's output
+/// directly so the user sees download progress.
+async fn ensure_brew_pkg(bin: &str, brew_pkg: &str) -> Result<()> {
+    let already = Command::new(bin)
+        .arg("--version")
+        .output()
+        .await
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if already {
+        return Ok(());
+    }
+    println!("  → installing via `brew install {brew_pkg}`...");
+    let status = Command::new("brew")
+        .arg("install")
+        .arg(brew_pkg)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .await
+        .map_err(|e| CliError::Internal(format!("brew install: {e}")))?;
+    if !status.success() {
+        return Err(CliError::BadArgs(format!(
+            "brew install {brew_pkg} failed — re-run `envs init` after fixing it"
+        )));
+    }
+    Ok(())
+}
+
+fn prompt_line(prompt: &str) -> Result<String> {
+    use std::io::{BufRead, Write};
+    print!("{prompt}");
+    std::io::stdout().flush()?;
+    let stdin = std::io::stdin();
+    let mut line = String::new();
+    stdin.lock().read_line(&mut line)?;
+    let trimmed = line.trim().to_string();
+    if trimmed.is_empty() {
+        return Err(CliError::BadArgs("empty input".into()));
+    }
+    Ok(trimmed)
 }
 
 enum InstallResult {

@@ -101,17 +101,12 @@ Three Rust binaries cooperate over Unix domain sockets and stdin/stdout pipes: *
 ### Cargo
 
 ```bash
-brew install rbw                                # Bitwarden CLI backend
-brew install jorgelbg/tap/pinentry-touchid      # required: TouchID-gated unlock
-rbw config set email you@example.com
-rbw config set pinentry pinentry-touchid
-rbw login && rbw unlock
-
 cargo install envs-cli envs-daemon envs-prompt
-envs init                                       # one-time setup wizard
+envs init   # bootstraps everything: brew-installs rbw + pinentry-touchid,
+            # configures rbw, runs `rbw login`, installs the LaunchAgent
 ```
 
-> `pinentry-touchid` is **required**. envs auto-locks rbw between every resolve and re-unlocks it on demand; without pinentry-touchid every cold call would prompt for your master password.
+> `envs init` is the only command you should need. It checks for Homebrew and auto-installs `rbw` and `pinentry-touchid` if missing, then wires `rbw` to use `pinentry-touchid` (so the master password is held by macOS Keychain and gated by TouchID, never by envs). You'll be prompted once for your Bitwarden email and master password; after that the bootstrap is complete.
 
 ### Homebrew (once tapped)
 
