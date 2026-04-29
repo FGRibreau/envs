@@ -88,7 +88,25 @@ pub fn format_user_error(e: &CliError) -> String {
                 "envs: peer verification failed (caller identity mismatch).".into()
             }
             ErrorCode::BinaryNotInProfile => format!(
-                "envs: {message}.\n  hint: run `envs project init` here, then re-run the command — the popup will let you choose bindings."
+                "envs: no profile or registry entry for `{message}`, and `--help` parsing found no env vars.\n\
+                 \n\
+                 Pick one:\n\
+                 \n\
+                 1. Bind ad-hoc on the command line:\n\
+                      envs --bind FOO=rbw://Foo --bind BAR=rbw://Bar/notes -- {message} <args>\n\
+                 \n\
+                 2. Save a project profile (committable — it only stores rbw:// pointers, never values):\n\
+                      cat > .envs/{message}.toml <<EOF\n\
+                      schema = 1\n\
+                      [binary]\n\
+                      name = \"{message}\"\n\
+                      \n\
+                      [[binding]]\n\
+                      env = \"FOO\"\n\
+                      src = \"rbw://Foo\"\n\
+                      EOF\n\
+                 \n\
+                 3. Save a global profile in ~/.envs/profiles/{message}.toml (same format)."
             ),
             _ => format!("envs: {message}"),
         },

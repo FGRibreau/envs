@@ -316,10 +316,35 @@ impl Handlers {
         named_profiles: &[String],
         extra_bindings: &[envs_proto::Binding],
     ) -> Result<Rule> {
-        let binary_name = canon_path
+        // The user-typed name (argv[0] basename) is what they expect to see in
+        // profile filenames, registry lookups, and error messages. The
+        // canonicalised binary name may be a wrapper (volta-shim, asdf-shim,
+        // mise-shim) that the user has never heard of — using it for lookups
+        // produces "no profile for volta-shim" errors that don't match the
+        // user's mental model of "I'm running node".
+        //
+        // Security still uses canon_path + sha256 for the rule cache key,
+        // so a rule for `envs node` is bound to the actual volta-shim binary.
+        let typed_name = argv
+            .first()
+            .map(|s| {
+                std::path::Path::new(s)
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or(s)
+                    .to_string()
+            })
+            .filter(|s| !s.is_empty())
+            .unwrap_or_default();
+        let canon_name = canon_path
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_default();
+        let binary_name = if !typed_name.is_empty() {
+            typed_name
+        } else {
+            canon_name.clone()
+        };
 
         let request_id = ulid::Ulid::new().to_string();
         let suggested = crate::discovery::discover(canon_path, &binary_name).await;
@@ -333,11 +358,11 @@ impl Handlers {
             compose_profile(&binary_name, project_root, named_profiles, extra_bindings)?;
 
         // Short-circuit when the helper has nothing to offer — no discovered suggestions,
-        // no profile, no inline --bind. Without this, the popup auto-cancels (stub mode)
-        // or shows an empty list (native mode) and the user sees a misleading
-        // "user cancelled" message. NoProfile maps to `BinaryNotInProfile`, which the
-        // CLI renders as "no profile or registry entry for <bin>" with a hint to
-        // run `envs project init`.
+        // no profile, no inline --bind. The stub helper (v0.3 ships without AppKit)
+        // can't let the user add bindings interactively, so a popup with zero
+        // suggestions is unrecoverable. NoProfile maps to `BinaryNotInProfile`,
+        // which the CLI renders with concrete next steps (--bind syntax + how
+        // to write a project profile).
         if suggested.is_empty() && current_profile.is_none() && extra_bindings.is_empty() {
             return Err(DaemonError::NoProfile(binary_name));
         }
