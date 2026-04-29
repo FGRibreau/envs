@@ -1,0 +1,18 @@
+[package]
+name = "envs-proto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Shared IPC types for envs CLI, envsd daemon, and envs-prompt helper"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+zeroize = { workspace = true }
+secrecy = { workspace = true }
+ulid = { workspace = true }
+chrono = { workspace = true }

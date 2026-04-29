@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/envs-proto",
+    "crates/envs-cli",
+    "crates/envs-daemon",
+    "crates/envs-prompt",
+]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.83"
+license = "MIT"
+authors = ["François-Guillaume Ribreau <fg@france-nuage.fr>"]
+repository = "https://github.com/fgribreau/envs"
+homepage = "https://github.com/fgribreau/envs"
+version = "0.1.0"
+
+[workspace.dependencies]
+tokio = { version = "1.41", features = ["rt-multi-thread", "macros", "net", "io-util", "io-std", "sync", "process", "signal", "time", "fs"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+clap = { version = "4.5", features = ["derive", "env"] }
+nix = { version = "0.29", features = ["process", "user", "socket", "fs", "signal"] }
+libc = "0.2"
+thiserror = "2.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+secrecy = { version = "0.10", features = ["serde"] }
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
+sha2 = "0.10"
+hex = "0.4"
+hmac = "0.12"
+rand = "0.8"
+ulid = { version = "1.1", features = ["serde"] }
+dirs = "5.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

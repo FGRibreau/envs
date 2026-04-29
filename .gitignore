@@ -1,0 +1,15 @@
+target/
+Cargo.lock.bak
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# dogfood/test artifacts (keep the markdown reports, ignore transient logs/transcripts)
+dogfood-output/transcripts/
+dogfood-output/screenshots/
+*.log
+
+# claude-code worktrees / caches
+.claude/tsc-cache/
