@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   test:
-    name: cargo test (macOS)
+    name: cargo test (macOS, no Docker)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,8 +19,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: cargo check
         run: cargo check --workspace --locked
-      - name: cargo test
-        run: cargo test --workspace --locked
+      # macOS GitHub runners have no Docker — run only unit tests + the
+      # non-Docker integration tests (it_go_compat). The Docker-dependent
+      # black-box tests (it_resolve, it_coverage) run in the integration job.
+      - name: cargo test (unit + doc + go_compat)
+        run: |
+          cargo test --workspace --locked --lib --bins --doc
+          cargo test --workspace --locked --test it_go_compat
         env:
           ENVS_HELPER_STUB: "1"
           ENVS_PROMPT_AUTO_GRANT: "1"
@@ -48,16 +53,19 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
   integration-docker:
-    name: integration (vaultwarden + rbw + envs)
+    name: integration (real vaultwarden + rbw)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: docker compose up + run tests
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: install rbw + rbw-agent
+        # Ubuntu runners don't have rbw via apt; cargo install is reliable.
+        run: cargo install rbw --version 1.15.0 --locked
+      - name: cargo test (Docker-backed black-box)
+        # Each test spins up its own vaultwarden via testcontainers. They
+        # serialise via #[serial_test::serial] inside a binary; the two
+        # binaries run sequentially here to avoid Docker contention.
         run: |
-          docker compose -f tests/integration/docker-compose.test.yml up \
-            --build --abort-on-container-exit --exit-code-from envs-test
-      - name: Dump daemon logs on failure
-        if: failure()
-        run: |
-          docker compose -f tests/integration/docker-compose.test.yml logs envs-test || true
-          docker compose -f tests/integration/docker-compose.test.yml logs vaultwarden || true
+          cargo test --workspace --locked --test it_resolve  -- --nocapture
+          cargo test --workspace --locked --test it_coverage -- --nocapture

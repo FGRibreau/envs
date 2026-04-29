@@ -1,206 +1,58 @@
-//! Extended integration coverage (/qa-expander adaptation).
+//! Black-box integration coverage against a real Vaultwarden + real rbw.
 //!
-//! Covers gaps not exercised by `it_resolve.rs`:
-//!   - Cache hit on second Resolve (no second helper prompt).
-//!   - HMAC chain verification after grant events.
-//!   - System binary refusal hint (refuses scope=Any when binary is system).
-//!     [Note: full refusal flow needs the helper to *return* GrantScope::Any
-//!     for a system binary; the daemon-side check rejects. We assert via
-//!     pre-flight world-writable / system-prefix logic instead, since the
-//!     stub helper auto-grants without scope-control.]
-//!   - Project profile takes precedence over global profile.
-//!   - Concurrent resolve requests (1 helper call, both succeed).
+//! Replaces the bash rbw shim. Every test spins up its own vaultwarden via
+//! testcontainers, registers a fresh account, plants real items, and drives
+//! envsd end-to-end.
 
-use envs_proto::{ArgvMatch, Request, Response};
-use std::io::Write;
+mod common;
+
+use common::{resolve_request_for, send, start_daemon, VaultFixture};
+use envs_proto::{ArgvMatch, Binding, Request, Response};
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::UnixStream;
+use std::time::Duration;
 
-struct DaemonHandle {
-    child: Child,
-    socket: PathBuf,
-    tmp: tempfile::TempDir,
-}
-
-impl Drop for DaemonHandle {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-fn home(h: &DaemonHandle) -> PathBuf {
-    h.tmp.path().join("home")
-}
-
-fn start_daemon() -> DaemonHandle {
-    let tmp = tempfile::tempdir().expect("tempdir");
-    let socket = tmp.path().join("envsd.sock");
-    let envs_home = tmp.path().join("home");
-    std::fs::create_dir_all(envs_home.join(".envs/state")).unwrap();
-    std::fs::create_dir_all(envs_home.join(".envs/logs")).unwrap();
-    std::fs::create_dir_all(envs_home.join(".envs/profiles")).unwrap();
-
-    // Fake rbw shim
-    let bin_dir = tmp.path().join("bin");
-    std::fs::create_dir_all(&bin_dir).unwrap();
-    let rbw_path = bin_dir.join("rbw");
-    let mut f = std::fs::File::create(&rbw_path).unwrap();
-    writeln!(
-        f,
-        "#!/bin/bash\n\
-         case \"$1\" in\n  \
-           --version) echo 'rbw-shim 0.0.0'; exit 0 ;;\n  \
-           unlocked) exit 0 ;;\n  \
-           lock) exit 0 ;;\n  \
-           unlock) exit 0 ;;\n  \
-           get) item=\"$2\"; field=password; if [ \"$3\" = --field ]; then field=\"$4\"; fi; echo \"v-$item-$field\"; exit 0 ;;\n  \
-           *) exit 1 ;;\n\
-         esac"
-    )
-    .unwrap();
-    drop(f);
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&rbw_path, std::fs::Permissions::from_mode(0o755)).unwrap();
-
-    let bin = env!("CARGO_BIN_EXE_envsd");
-    let path_var = format!(
-        "{}:{}",
-        bin_dir.display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
-
-    let child = Command::new(bin)
-        .env("HOME", &envs_home)
-        .env("ENVS_SOCKET", &socket)
-        .env("ENVS_HELPER_STUB", "1")
-        .env("ENVS_SKIP_REGISTRY_SYNC", "1")
-        .env("PATH", &path_var)
-        .env("RUST_LOG", "envs_daemon=debug")
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("spawn envsd");
-
-    let deadline = Instant::now() + Duration::from_secs(3);
-    while Instant::now() < deadline && !socket.exists() {
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    assert!(socket.exists(), "envsd did not create socket");
-
-    DaemonHandle { child, socket, tmp }
-}
-
-async fn send(socket: &std::path::Path, req: &Request) -> Response {
-    let stream = UnixStream::connect(socket).await.expect("connect");
-    let (read_half, mut write_half) = stream.into_split();
-    let mut buf = serde_json::to_vec(req).unwrap();
-    buf.push(b'\n');
-    write_half.write_all(&buf).await.unwrap();
-    write_half.flush().await.unwrap();
-    drop(write_half);
-
-    let mut reader = BufReader::new(read_half);
-    let mut line = String::new();
-    let n = reader.read_line(&mut line).await.unwrap();
-    assert!(n > 0, "no response");
-    serde_json::from_str(line.trim()).expect("parse response")
-}
-
-fn write_global_profile(home: &std::path::Path, binary: &str, env_key: &str, source: &str) {
-    let path = home
-        .join(".envs")
-        .join("profiles")
-        .join(format!("{binary}.toml"));
-    let content = format!(
-        r#"
-schema = 1
-[binary]
-name = "{binary}"
-[[binding]]
-env = "{env_key}"
-src = "{source}"
-"#
-    );
-    std::fs::write(path, content).unwrap();
-}
-
+#[serial_test::serial]
 #[tokio::test]
 async fn cache_hit_on_second_resolve() {
-    let h = start_daemon();
-    let home_dir = home(&h);
-    write_global_profile(&home_dir, "envsd", "CACHE_KEY", "rbw://CACHE_KEY");
+    let fx = VaultFixture::start().await;
+    fx.rbw_add("CACHE_KEY", "cache-value");
+    fx.write_profile("envsd", &[("CACHE_KEY", "rbw://CACHE_KEY")]);
 
+    let h = start_daemon(fx);
     let canon = PathBuf::from(env!("CARGO_BIN_EXE_envsd"));
-    let make_req = || Request::Resolve {
-        canon_path: canon.clone(),
-        sha256: "deadbeef".into(),
-        codesign_team: None,
-        argv: vec!["envsd".into()],
-        cwd: h.tmp.path().to_path_buf(),
-        project_root: None,
-        client_pid: std::process::id() as i32,
-        profiles: Vec::new(),
-        extra_bindings: Vec::new(),
-    };
 
-    let r1 = send(&h.socket, &make_req()).await;
-    let id1 = match r1 {
+    let id1 = match send(
+        &h.socket,
+        &resolve_request_for(canon.clone(), vec!["envsd".into()]),
+    )
+    .await
+    {
         Response::Resolved { rule_id, .. } => rule_id,
         other => panic!("expected Resolved, got {other:?}"),
     };
-
-    // Status check between calls
-    let status_resp = send(&h.socket, &Request::Status).await;
-    eprintln!("STATUS BETWEEN CALLS: {status_resp:?}");
-
-    let list_resp = send(&h.socket, &Request::ListRules).await;
-    eprintln!("LIST BETWEEN CALLS: {list_resp:?}");
-
-    let r2 = send(&h.socket, &make_req()).await;
-    let id2 = match r2 {
+    let id2 = match send(&h.socket, &resolve_request_for(canon, vec!["envsd".into()])).await {
         Response::Resolved { rule_id, .. } => rule_id,
         other => panic!("expected Resolved, got {other:?}"),
     };
-
-    // Same rule means the cache was hit on the second call.
-    if id1 != id2 {
-        let log = std::fs::read_to_string(h.tmp.path().join("envsd.stderr")).unwrap_or_default();
-        eprintln!("daemon stderr:\n{log}");
-        panic!("rule_id mismatch: {id1} vs {id2}");
-    }
+    assert_eq!(id1, id2, "second Resolve must hit the rule cache");
 }
 
+#[serial_test::serial]
 #[tokio::test]
 async fn list_rules_after_grant() {
-    let h = start_daemon();
-    let home_dir = home(&h);
-    write_global_profile(&home_dir, "envsd", "LIST_KEY", "rbw://LIST_KEY");
+    let fx = VaultFixture::start().await;
+    fx.rbw_add("LIST_KEY", "list-value");
+    fx.write_profile("envsd", &[("LIST_KEY", "rbw://LIST_KEY")]);
 
+    let h = start_daemon(fx);
     let canon = PathBuf::from(env!("CARGO_BIN_EXE_envsd"));
-    let resp = send(
+    let _ = send(
         &h.socket,
-        &Request::Resolve {
-            canon_path: canon.clone(),
-            sha256: "abc123".into(),
-            codesign_team: None,
-            argv: vec!["envsd".into()],
-            cwd: h.tmp.path().to_path_buf(),
-            project_root: None,
-            client_pid: std::process::id() as i32,
-            profiles: Vec::new(),
-            extra_bindings: Vec::new(),
-        },
+        &resolve_request_for(canon.clone(), vec!["envsd".into()]),
     )
     .await;
-    matches!(resp, Response::Resolved { .. });
 
-    // Now ListRules should return one entry.
-    let resp = send(&h.socket, &Request::ListRules).await;
-    match resp {
+    match send(&h.socket, &Request::ListRules).await {
         Response::Rules { rules } => {
             assert_eq!(rules.len(), 1);
             assert_eq!(rules[0].canon_path, canon);
@@ -211,369 +63,236 @@ async fn list_rules_after_grant() {
     }
 }
 
+#[serial_test::serial]
 #[tokio::test]
 async fn revoke_removes_rule() {
-    let h = start_daemon();
-    let home_dir = home(&h);
-    write_global_profile(&home_dir, "envsd", "REV_KEY", "rbw://REV_KEY");
+    let fx = VaultFixture::start().await;
+    fx.rbw_add("REV_KEY", "rev-value");
+    fx.write_profile("envsd", &[("REV_KEY", "rbw://REV_KEY")]);
 
+    let h = start_daemon(fx);
     let canon = PathBuf::from(env!("CARGO_BIN_EXE_envsd"));
-    let resolved = send(
-        &h.socket,
-        &Request::Resolve {
-            canon_path: canon.clone(),
-            sha256: "abc".into(),
-            codesign_team: None,
-            argv: vec!["envsd".into()],
-            cwd: h.tmp.path().to_path_buf(),
-            project_root: None,
-            client_pid: std::process::id() as i32,
-            profiles: Vec::new(),
-            extra_bindings: Vec::new(),
-        },
-    )
-    .await;
-    let rule_id = match resolved {
+    let rule_id = match send(&h.socket, &resolve_request_for(canon, vec!["envsd".into()])).await {
         Response::Resolved { rule_id, .. } => rule_id,
         other => panic!("expected Resolved, got {other:?}"),
     };
 
-    // Revoke
-    let resp = send(
+    let _ = send(
         &h.socket,
         &Request::Revoke {
             rule_id: Some(rule_id),
         },
     )
     .await;
-    matches!(resp, Response::Ok);
 
-    // ListRules should now be empty
-    let resp = send(&h.socket, &Request::ListRules).await;
-    match resp {
+    match send(&h.socket, &Request::ListRules).await {
         Response::Rules { rules } => assert_eq!(rules.len(), 0),
         other => panic!("expected Rules, got {other:?}"),
     }
 }
 
+#[serial_test::serial]
 #[tokio::test]
 async fn project_root_creates_separate_rule() {
-    let h = start_daemon();
-    let home_dir = home(&h);
+    let fx = VaultFixture::start().await;
+    fx.rbw_add("PROJ_A", "value-a");
+    fx.rbw_add("PROJ_B", "value-b");
 
-    // Project A
-    let project_a = h.tmp.path().join("project-a");
-    std::fs::create_dir_all(project_a.join(".envs")).unwrap();
-    std::fs::write(
-        project_a.join(".envs/envsd.toml"),
-        "schema = 1\n[binary]\nname=\"envsd\"\n[[binding]]\nenv=\"PROJ_A\"\nsrc=\"rbw://PROJ_A\"\n",
-    )
-    .unwrap();
+    let project_a = fx.home.path().join("project-a");
+    let project_b = fx.home.path().join("project-b");
+    fx.write_project_profile(&project_a, "envsd", &[("PROJ_A", "rbw://PROJ_A")]);
+    fx.write_project_profile(&project_b, "envsd", &[("PROJ_B", "rbw://PROJ_B")]);
 
-    // Project B (different binding source)
-    let project_b = h.tmp.path().join("project-b");
-    std::fs::create_dir_all(project_b.join(".envs")).unwrap();
-    std::fs::write(
-        project_b.join(".envs/envsd.toml"),
-        "schema = 1\n[binary]\nname=\"envsd\"\n[[binding]]\nenv=\"PROJ_B\"\nsrc=\"rbw://PROJ_B\"\n",
-    )
-    .unwrap();
-
-    let _ = home_dir; // silence unused if needed
-
+    let h = start_daemon(fx);
     let canon = PathBuf::from(env!("CARGO_BIN_EXE_envsd"));
 
-    // Resolve in project A
-    let r_a = send(
-        &h.socket,
-        &Request::Resolve {
-            canon_path: canon.clone(),
-            sha256: "abc".into(),
-            codesign_team: None,
-            argv: vec!["envsd".into()],
-            cwd: project_a.clone(),
-            project_root: Some(project_a.clone()),
-            client_pid: std::process::id() as i32,
-            profiles: Vec::new(),
-            extra_bindings: Vec::new(),
-        },
-    )
-    .await;
-    let id_a = match r_a {
+    let req_a = Request::Resolve {
+        canon_path: canon.clone(),
+        sha256: "abc".into(),
+        codesign_team: None,
+        argv: vec!["envsd".into()],
+        cwd: project_a.clone(),
+        project_root: Some(project_a.clone()),
+        client_pid: std::process::id() as i32,
+        profiles: Vec::new(),
+        extra_bindings: Vec::new(),
+    };
+    let req_b = Request::Resolve {
+        canon_path: canon,
+        sha256: "abc".into(),
+        codesign_team: None,
+        argv: vec!["envsd".into()],
+        cwd: project_b.clone(),
+        project_root: Some(project_b),
+        client_pid: std::process::id() as i32,
+        profiles: Vec::new(),
+        extra_bindings: Vec::new(),
+    };
+
+    let id_a = match send(&h.socket, &req_a).await {
         Response::Resolved {
             rule_id, entries, ..
         } => {
             assert_eq!(entries[0].key, "PROJ_A");
+            assert_eq!(entries[0].value, "value-a");
             rule_id
         }
         other => panic!("expected Resolved, got {other:?}"),
     };
-
-    // Resolve in project B
-    let r_b = send(
-        &h.socket,
-        &Request::Resolve {
-            canon_path: canon.clone(),
-            sha256: "abc".into(),
-            codesign_team: None,
-            argv: vec!["envsd".into()],
-            cwd: project_b.clone(),
-            project_root: Some(project_b.clone()),
-            client_pid: std::process::id() as i32,
-            profiles: Vec::new(),
-            extra_bindings: Vec::new(),
-        },
-    )
-    .await;
-    let id_b = match r_b {
+    let id_b = match send(&h.socket, &req_b).await {
         Response::Resolved {
             rule_id, entries, ..
         } => {
             assert_eq!(entries[0].key, "PROJ_B");
+            assert_eq!(entries[0].value, "value-b");
             rule_id
         }
         other => panic!("expected Resolved, got {other:?}"),
     };
-
     assert_ne!(id_a, id_b, "rules in different projects must be distinct");
 }
 
+#[serial_test::serial]
 #[tokio::test]
 async fn audit_log_is_chained_and_verifiable() {
-    let h = start_daemon();
-    let home_dir = home(&h);
-    write_global_profile(&home_dir, "envsd", "AUDIT_KEY", "rbw://AUDIT_KEY");
+    let fx = VaultFixture::start().await;
+    fx.rbw_add("AUDIT_KEY", "audit-value");
+    fx.write_profile("envsd", &[("AUDIT_KEY", "rbw://AUDIT_KEY")]);
 
+    let h = start_daemon(fx);
     let canon = PathBuf::from(env!("CARGO_BIN_EXE_envsd"));
-    // Trigger several events
     for _ in 0..3 {
         let _ = send(
             &h.socket,
-            &Request::Resolve {
-                canon_path: canon.clone(),
-                sha256: "abc".into(),
-                codesign_team: None,
-                argv: vec!["envsd".into()],
-                cwd: h.tmp.path().to_path_buf(),
-                project_root: None,
-                client_pid: std::process::id() as i32,
-                profiles: Vec::new(),
-                extra_bindings: Vec::new(),
-            },
+            &resolve_request_for(canon.clone(), vec!["envsd".into()]),
         )
         .await;
     }
-
-    // Stop daemon to flush audit log
     drop(h);
     std::thread::sleep(Duration::from_millis(100));
-
-    // Note: tmpdir is dropped with `h`. We can't read the audit file after this
-    // unless we keep the tmpdir alive. For this test, we rely on the daemon's
-    // own writes succeeding (asserted by absence of panic/error response).
-    // A proper end-to-end audit verify test is in a separate suite that keeps
-    // the tmp alive — see `audit_verify_with_persistent_tmp` below.
 }
 
+#[serial_test::serial]
 #[tokio::test]
 async fn extra_bindings_override_profile() {
-    // --bind KEY=rbw://... wins over profile bindings; both deliver values.
-    let h = start_daemon();
-    let home_dir = home(&h);
-    write_global_profile(&home_dir, "envsd", "PROFILE_KEY", "rbw://PROFILE_KEY");
+    let fx = VaultFixture::start().await;
+    fx.rbw_add("PROFILE_KEY", "profile-value");
+    fx.rbw_add("INLINE_KEY", "inline-value");
+    fx.write_profile("envsd", &[("PROFILE_KEY", "rbw://PROFILE_KEY")]);
 
+    let h = start_daemon(fx);
     let canon = PathBuf::from(env!("CARGO_BIN_EXE_envsd"));
-    let extra = vec![envs_proto::Binding {
-        env: "INLINE_KEY".into(),
-        source: "rbw://INLINE_KEY".into(),
-    }];
-
-    let resp = send(
-        &h.socket,
-        &Request::Resolve {
-            canon_path: canon,
-            sha256: "abc".into(),
-            codesign_team: None,
-            argv: vec!["envsd".into()],
-            cwd: h.tmp.path().to_path_buf(),
-            project_root: None,
-            client_pid: std::process::id() as i32,
-            profiles: vec![],
-            extra_bindings: extra,
-        },
-    )
-    .await;
-    match resp {
+    let req = Request::Resolve {
+        canon_path: canon,
+        sha256: "abc".into(),
+        codesign_team: None,
+        argv: vec!["envsd".into()],
+        cwd: std::env::temp_dir(),
+        project_root: None,
+        client_pid: std::process::id() as i32,
+        profiles: Vec::new(),
+        extra_bindings: vec![Binding {
+            env: "INLINE_KEY".into(),
+            source: "rbw://INLINE_KEY".into(),
+        }],
+    };
+    match send(&h.socket, &req).await {
         Response::Resolved { entries, .. } => {
-            // Both bindings should be present (profile + inline).
             let keys: Vec<String> = entries.iter().map(|e| e.key.clone()).collect();
             assert!(
-                keys.contains(&"PROFILE_KEY".to_string()),
+                keys.contains(&"PROFILE_KEY".into()),
                 "missing PROFILE_KEY in {keys:?}"
             );
             assert!(
-                keys.contains(&"INLINE_KEY".to_string()),
+                keys.contains(&"INLINE_KEY".into()),
                 "missing INLINE_KEY in {keys:?}"
             );
+            let profile_val = entries.iter().find(|e| e.key == "PROFILE_KEY").unwrap();
+            let inline_val = entries.iter().find(|e| e.key == "INLINE_KEY").unwrap();
+            assert_eq!(profile_val.value, "profile-value");
+            assert_eq!(inline_val.value, "inline-value");
         }
         other => panic!("expected Resolved, got {other:?}"),
     }
 }
 
+#[serial_test::serial]
 #[tokio::test]
-async fn extra_bindings_conflict_with_profile_succeeds_with_inline_winning() {
-    // When --bind specifies the same env_var as the profile but with the same source,
-    // no conflict. With different sources, --bind always wins (it's an explicit override).
-    let h = start_daemon();
-    let home_dir = home(&h);
-    write_global_profile(&home_dir, "envsd", "OVERRIDE_KEY", "rbw://OLD_SRC");
+async fn extra_bindings_override_profile_inline_winning() {
+    // --bind specifying the same env var as the profile but a different source
+    // wins. Both items must exist in the vault to verify which one rbw fetched.
+    let fx = VaultFixture::start().await;
+    fx.rbw_add("OLD_SRC", "old-value");
+    fx.rbw_add("NEW_SRC", "new-value");
+    fx.write_profile("envsd", &[("OVERRIDE_KEY", "rbw://OLD_SRC")]);
 
+    let h = start_daemon(fx);
     let canon = PathBuf::from(env!("CARGO_BIN_EXE_envsd"));
-    let extra = vec![envs_proto::Binding {
-        env: "OVERRIDE_KEY".into(),
-        source: "rbw://NEW_SRC".into(),
-    }];
-
-    let resp = send(
-        &h.socket,
-        &Request::Resolve {
-            canon_path: canon,
-            sha256: "abc".into(),
-            codesign_team: None,
-            argv: vec!["envsd".into()],
-            cwd: h.tmp.path().to_path_buf(),
-            project_root: None,
-            client_pid: std::process::id() as i32,
-            profiles: vec![],
-            extra_bindings: extra,
-        },
-    )
-    .await;
-    match resp {
+    let req = Request::Resolve {
+        canon_path: canon,
+        sha256: "abc".into(),
+        codesign_team: None,
+        argv: vec!["envsd".into()],
+        cwd: std::env::temp_dir(),
+        project_root: None,
+        client_pid: std::process::id() as i32,
+        profiles: Vec::new(),
+        extra_bindings: vec![Binding {
+            env: "OVERRIDE_KEY".into(),
+            source: "rbw://NEW_SRC".into(),
+        }],
+    };
+    match send(&h.socket, &req).await {
         Response::Resolved { entries, .. } => {
             let entry = entries
                 .iter()
                 .find(|e| e.key == "OVERRIDE_KEY")
                 .expect("OVERRIDE_KEY missing");
-            // Fake rbw shim returns "v-<item>-<field>". With --bind override the item is NEW_SRC.
-            assert_eq!(entry.value, "v-NEW_SRC-password");
+            assert_eq!(entry.value, "new-value", "--bind must override profile");
         }
         other => panic!("expected Resolved, got {other:?}"),
     }
 }
 
+#[serial_test::serial]
 #[tokio::test]
 async fn vault_locked_returns_clear_error() {
-    // Replace the rbw shim with one that always reports "locked".
-    let tmp = tempfile::tempdir().expect("tempdir");
-    let socket = tmp.path().join("envsd.sock");
-    let envs_home = tmp.path().join("home");
-    std::fs::create_dir_all(envs_home.join(".envs/state")).unwrap();
-    std::fs::create_dir_all(envs_home.join(".envs/logs")).unwrap();
-    std::fs::create_dir_all(envs_home.join(".envs/profiles")).unwrap();
-    write_global_profile(&envs_home, "envsd", "LOCKED_KEY", "rbw://LOCKED_KEY");
+    // Real vault, real rbw, but pinentry is broken so auto-unlock fails →
+    // daemon surfaces RbwLocked.
+    let fx = VaultFixture::start().await;
+    fx.rbw_add("LOCKED_KEY", "doesnt-matter");
+    fx.write_profile("envsd", &[("LOCKED_KEY", "rbw://LOCKED_KEY")]);
+    fx.rbw_lock();
+    fx.break_pinentry(); // any unlock attempt now fails
 
-    let bin_dir = tmp.path().join("bin");
-    std::fs::create_dir_all(&bin_dir).unwrap();
-    let rbw_path = bin_dir.join("rbw");
-    let mut f = std::fs::File::create(&rbw_path).unwrap();
-    use std::io::Write;
-    writeln!(
-        f,
-        "#!/bin/bash\n\
-         case \"$1\" in\n  \
-           --version) echo 'rbw-shim 0.0.0'; exit 0 ;;\n  \
-           unlocked) exit 1 ;;\n  \
-           get) echo 'Error: vault is Locked' >&2; exit 1 ;;\n  \
-           *) exit 1 ;;\n\
-         esac"
-    )
-    .unwrap();
-    drop(f);
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&rbw_path, std::fs::Permissions::from_mode(0o755)).unwrap();
-
-    let bin = env!("CARGO_BIN_EXE_envsd");
-    let path_var = format!(
-        "{}:{}",
-        bin_dir.display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
-
-    let mut child = Command::new(bin)
-        .env("HOME", &envs_home)
-        .env("ENVS_SOCKET", &socket)
-        .env("ENVS_HELPER_STUB", "1")
-        .env("ENVS_SKIP_REGISTRY_SYNC", "1")
-        .env("PATH", &path_var)
-        .env("RUST_LOG", "envs_daemon=warn")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("spawn envsd");
-
-    let deadline = Instant::now() + Duration::from_secs(3);
-    while Instant::now() < deadline && !socket.exists() {
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    assert!(socket.exists());
-
-    let canon = PathBuf::from(bin);
-    let resp = send(
-        &socket,
-        &Request::Resolve {
-            canon_path: canon,
-            sha256: "abc".into(),
-            codesign_team: None,
-            argv: vec!["envsd".into()],
-            cwd: tmp.path().to_path_buf(),
-            project_root: None,
-            client_pid: std::process::id() as i32,
-            profiles: vec![],
-            extra_bindings: vec![],
-        },
-    )
-    .await;
-    match resp {
+    let h = start_daemon(fx);
+    let canon = PathBuf::from(env!("CARGO_BIN_EXE_envsd"));
+    match send(&h.socket, &resolve_request_for(canon, vec!["envsd".into()])).await {
         Response::Error { code, message } => {
             assert!(
                 matches!(code, envs_proto::ErrorCode::RbwLocked),
-                "expected RbwLocked, got {code:?} (message: {message})"
+                "expected RbwLocked, got {code:?} ({message})"
             );
         }
         other => panic!("expected Error, got {other:?}"),
     }
-
-    let _ = child.kill();
-    let _ = child.wait();
 }
 
+#[serial_test::serial]
 #[tokio::test]
 async fn audit_verify_with_persistent_tmp() {
-    let h = start_daemon();
-    let home_dir = home(&h);
-    write_global_profile(&home_dir, "envsd", "VERIFY_KEY", "rbw://VERIFY_KEY");
+    let fx = VaultFixture::start().await;
+    fx.rbw_add("VERIFY_KEY", "verify-value");
+    fx.write_profile("envsd", &[("VERIFY_KEY", "rbw://VERIFY_KEY")]);
 
+    let h = start_daemon(fx);
+    let envs_home = h.envs_home.clone();
     let canon = PathBuf::from(env!("CARGO_BIN_EXE_envsd"));
-    let _ = send(
-        &h.socket,
-        &Request::Resolve {
-            canon_path: canon.clone(),
-            sha256: "abc".into(),
-            codesign_team: None,
-            argv: vec!["envsd".into()],
-            cwd: h.tmp.path().to_path_buf(),
-            project_root: None,
-            client_pid: std::process::id() as i32,
-            profiles: Vec::new(),
-            extra_bindings: Vec::new(),
-        },
-    )
-    .await;
+    let _ = send(&h.socket, &resolve_request_for(canon, vec!["envsd".into()])).await;
 
-    // Audit file should exist with chained events
-    let audit_path = home_dir.join(".envs/logs/audit.jsonl");
-    let key_path = home_dir.join(".envs/state/audit.key");
+    // Audit file should exist
+    let audit_path = envs_home.join(".envs/logs/audit.jsonl");
+    let key_path = envs_home.join(".envs/state/audit.key");
     assert!(
         audit_path.exists(),
         "audit.jsonl missing at {}",
@@ -589,22 +308,20 @@ async fn audit_verify_with_persistent_tmp() {
     let lines: Vec<&str> = content.lines().filter(|l| !l.is_empty()).collect();
     assert!(
         lines.len() >= 2,
-        "expected at least daemon_start + grant events, got {}",
+        "expected at least 2 events, got {}",
         lines.len()
     );
 
-    // Verify each event has _hmac field (HMAC chain)
     for (i, line) in lines.iter().enumerate() {
         let v: serde_json::Value = serde_json::from_str(line).unwrap();
         let hmac = v
             .get("_hmac")
             .and_then(|h| h.as_str())
-            .unwrap_or_else(|| panic!("line {i} has no _hmac"));
-        assert_eq!(hmac.len(), 64, "line {i} _hmac should be 64 hex chars");
+            .unwrap_or_else(|| panic!("line {i} no _hmac"));
+        assert_eq!(hmac.len(), 64, "line {i} hmac");
     }
 
-    // Replay the CLI's verify logic exactly (serde_json::Value-based) to catch
-    // serialization-order regressions between daemon write and CLI verify.
+    // Replay CLI verify logic — catches serialization-order regressions.
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
