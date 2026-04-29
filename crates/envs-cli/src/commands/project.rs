@@ -107,7 +107,13 @@ async fn init() -> Result<()> {
     if existing.lines().any(|l| l.trim() == ".envs/") {
         println!("  (.envs/ already in .gitignore)");
     } else {
-        print!("Add .envs/ to .gitignore? [y/N] ");
+        println!();
+        println!("`.envs/` only stores `rbw://` pointers to your vault items —");
+        println!("never the actual secret values. Committing it lets your team");
+        println!("share the same env-var → vault-item mapping (everyone still");
+        println!("authorises with their own Bitwarden + TouchID).");
+        println!();
+        print!("Add .envs/ to .gitignore anyway? [y/N] ");
         std::io::stdout().flush()?;
         let mut answer = String::new();
         std::io::stdin().read_line(&mut answer)?;
@@ -120,7 +126,7 @@ async fn init() -> Result<()> {
             std::fs::write(&gitignore, content)?;
             println!("✓ added .envs/ to .gitignore");
         } else {
-            println!("(skipped — your team can share vault item names if you commit .envs/)");
+            println!("✓ keeping .envs/ tracked — commit it so your team gets the same mapping");
         }
     }
 
