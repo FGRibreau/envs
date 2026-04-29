@@ -225,8 +225,7 @@ fn is_system_binary(path: &std::path::Path) -> bool {
 }
 
 fn send_reply(reply: &HelperReply) -> std::io::Result<()> {
-    let mut buf =
-        serde_json::to_vec(reply).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    let mut buf = serde_json::to_vec(reply).map_err(std::io::Error::other)?;
     buf.push(b'\n');
     let stdout = std::io::stdout();
     let mut handle = stdout.lock();

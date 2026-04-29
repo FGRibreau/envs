@@ -140,7 +140,7 @@ async fn stop() -> Result<()> {
             std::fs::remove_file(&pid_path).ok();
             Ok(())
         }
-        Err(e) if e == nix::errno::Errno::ESRCH => {
+        Err(nix::errno::Errno::ESRCH) => {
             println!("(pid {pid} not running — clearing stale pid file)");
             std::fs::remove_file(&pid_path).ok();
             Ok(())

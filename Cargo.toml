@@ -16,6 +16,17 @@ repository = "https://github.com/fgribreau/envs"
 homepage = "https://github.com/fgribreau/envs"
 version = "0.1.0"
 
+[workspace.lints.clippy]
+# Allowed by design — see comments at the relevant sites.
+#
+# `large_enum_variant`: HelperEvent::NewRequest(PromptRequest) is intentionally
+# rich (it carries the full popup state). Boxing would add an indirection per
+# event for marginal memory savings on a low-traffic path.
+large_enum_variant = "allow"
+# `too_many_arguments`: Resolve/Rule::new are spec-driven; refactoring into a
+# struct for the sake of clippy would just shift the verbosity to call sites.
+too_many_arguments = "allow"
+
 [workspace.dependencies]
 tokio = { version = "1.41", features = ["rt-multi-thread", "macros", "net", "io-util", "io-std", "sync", "process", "signal", "time", "fs"] }
 serde = { version = "1.0", features = ["derive"] }

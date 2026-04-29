@@ -8,6 +8,9 @@ authors.workspace = true
 repository.workspace = true
 description = "envsd — long-running daemon for envs (UDS server, cache, rbw client)"
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "envsd"
 path = "src/main.rs"

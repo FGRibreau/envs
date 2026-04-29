@@ -71,7 +71,7 @@ mod real {
                 ctx.evaluatePolicy_localizedReason_reply(
                     LAPolicy::DeviceOwnerAuthenticationWithBiometrics,
                     &reason_ns,
-                    &*block,
+                    &block,
                 );
             }
             // `block` (Retained<Block>) goes out of scope here. Refcount drops

@@ -56,8 +56,10 @@ pub fn load_profile(path: &Path) -> Result<Profile> {
 }
 
 /// Resolve a profile for `binary_name`. Order:
+///
 /// 1. project-local `<project_root>/.envs/<binary>.toml`
 /// 2. global `~/.envs/profiles/<binary>.toml`
+///
 /// Returns the first found, or None if neither exists.
 #[allow(dead_code)]
 pub fn resolve_profile(binary_name: &str, project_root: Option<&Path>) -> Result<Option<Profile>> {

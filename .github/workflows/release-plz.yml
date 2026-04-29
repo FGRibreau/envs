@@ -22,7 +22,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          # Fall back to the default GITHUB_TOKEN until the user configures
+          # a Personal Access Token in the `release` environment. The release-plz
+          # action below will fail visibly without RELEASE_PLZ_TOKEN — that's
+          # the right signal for the bootstrap step. Without this fallback the
+          # workflow fails at checkout, which is harder to debug.
+          token: ${{ secrets.RELEASE_PLZ_TOKEN || github.token }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: release-plz/action@v0.5
         with:
@@ -43,7 +48,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          # Fall back to the default GITHUB_TOKEN until the user configures
+          # a Personal Access Token in the `release` environment. The release-plz
+          # action below will fail visibly without RELEASE_PLZ_TOKEN — that's
+          # the right signal for the bootstrap step. Without this fallback the
+          # workflow fails at checkout, which is harder to debug.
+          token: ${{ secrets.RELEASE_PLZ_TOKEN || github.token }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: release-plz/action@v0.5
         with:

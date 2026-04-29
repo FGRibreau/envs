@@ -86,7 +86,7 @@ fn init_chain() -> Result<ChainState> {
     } else {
         let mut k = [0u8; KEY_BYTES];
         rand::thread_rng().fill_bytes(&mut k);
-        std::fs::write(&path, &k)?;
+        std::fs::write(&path, k)?;
         set_file_perms(&path, 0o600)?;
         k
     };

@@ -36,7 +36,7 @@ pub fn run(args: ExecArgs) -> Result<std::convert::Infallible> {
     // nix exposes execve which takes (path, argv, envp) and is the right primitive.
     let err = nix::unistd::execve(args.argv0.as_c_str(), &arg_refs, &env_refs)
         .err()
-        .unwrap_or_else(|| nix::Error::EINVAL);
+        .unwrap_or(nix::Error::EINVAL);
 
     Err(CliError::Internal(format!("execve failed: {err}")))
 }

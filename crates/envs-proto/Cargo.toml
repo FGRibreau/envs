@@ -8,6 +8,9 @@ authors.workspace = true
 repository.workspace = true
 description = "Shared IPC types for envs CLI, envsd daemon, and envs-prompt helper"
 
+[lints]
+workspace = true
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }

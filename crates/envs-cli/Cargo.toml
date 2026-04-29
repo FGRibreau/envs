@@ -8,6 +8,9 @@ authors.workspace = true
 repository.workspace = true
 description = "envs — Lulu-style firewall for environment variables (CLI wrapper)"
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "envs"
 path = "src/main.rs"

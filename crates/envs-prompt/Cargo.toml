@@ -8,6 +8,9 @@ authors.workspace = true
 repository.workspace = true
 description = "envs-prompt — popup helper for envsd daemon (v0.1: stub mode only)"
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "envs-prompt"
 path = "src/main.rs"

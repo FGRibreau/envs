@@ -295,16 +295,14 @@ impl EnvsAppDelegate {
     fn hide_window(&self) {
         let win = self.ivars().window.borrow();
         if let Some(win) = win.as_deref() {
-            unsafe { win.orderOut(None) };
+            win.orderOut(None);
         }
     }
 
     fn toggle_window(&self) {
         let visible = {
             let win = self.ivars().window.borrow();
-            win.as_deref()
-                .map(|w| unsafe { w.isVisible() })
-                .unwrap_or(false)
+            win.as_deref().map(|w| w.isVisible()).unwrap_or(false)
         };
         if visible {
             self.hide_window();
@@ -493,7 +491,7 @@ impl EnvsAppDelegate {
                 "Any invocation of {}",
                 tab.request.binary_name
             )));
-            scope_popup.addItemWithTitle(&NSString::from_str(&format!("Only this exact command",)));
+            scope_popup.addItemWithTitle(&NSString::from_str("Only this exact command"));
             scope_popup.selectItemAtIndex(tab.scope_choice as isize);
         }
         unsafe { root.addArrangedSubview(&scope_popup) };

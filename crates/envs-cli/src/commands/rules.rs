@@ -21,7 +21,7 @@ async fn list() -> Result<()> {
                 println!("(no active rules)");
                 return Ok(());
             }
-            println!("{:24} {:40} {:8} {}", "ID", "BINARY", "SCOPE", "EXPIRES");
+            println!("{:24} {:40} {:8} EXPIRES", "ID", "BINARY", "SCOPE");
             for r in rules {
                 let scope = match &r.argv_match {
                     envs_proto::ArgvMatch::Any => "Any".to_string(),

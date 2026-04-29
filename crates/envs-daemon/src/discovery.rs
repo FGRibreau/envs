@@ -162,9 +162,9 @@ fn parse_help_for_env_vars(help: &str, binary_name: &str) -> Vec<SuggestedBindin
             };
 
             let reason = if mentions_env {
-                format!("--help mentions env var")
+                "--help mentions env var".to_string()
             } else {
-                format!("--help contains uppercase identifier")
+                "--help contains uppercase identifier".to_string()
             };
 
             found
