@@ -175,8 +175,12 @@ fn run_native_mode() -> anyhow::Result<()> {
 }
 
 /// Stub-mode handler: auto-approve with default scope (system-binary-aware).
+/// The user's saved profile is authoritative; discovery suggestions only
+/// matter when no profile exists yet (real popup shows both).
 fn handle_request_stub(req: PromptRequest) -> HelperReply {
-    let bindings: Vec<Binding> = if !req.suggested_bindings.is_empty() {
+    let bindings: Vec<Binding> = if let Some(profile) = &req.current_profile {
+        profile.bindings.clone()
+    } else if !req.suggested_bindings.is_empty() {
         req.suggested_bindings
             .iter()
             .map(|s| Binding {
@@ -184,8 +188,6 @@ fn handle_request_stub(req: PromptRequest) -> HelperReply {
                 source: s.source.clone(),
             })
             .collect()
-    } else if let Some(profile) = &req.current_profile {
-        profile.bindings.clone()
     } else {
         Vec::new()
     };

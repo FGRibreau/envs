@@ -602,4 +602,30 @@ async fn audit_verify_with_persistent_tmp() {
             .unwrap_or_else(|| panic!("line {i} has no _hmac"));
         assert_eq!(hmac.len(), 64, "line {i} _hmac should be 64 hex chars");
     }
+
+    // Replay the CLI's verify logic exactly (serde_json::Value-based) to catch
+    // serialization-order regressions between daemon write and CLI verify.
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+    type HmacSha256 = Hmac<Sha256>;
+    let key = std::fs::read(&key_path).unwrap();
+    let mut prev = String::new();
+    for (i, line) in lines.iter().enumerate() {
+        let mut value: serde_json::Value = serde_json::from_str(line).unwrap();
+        let stored = value
+            .as_object_mut()
+            .and_then(|m| m.remove("_hmac"))
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap();
+        let payload = serde_json::to_vec(&value).unwrap();
+        let mut mac = HmacSha256::new_from_slice(&key).unwrap();
+        mac.update(prev.as_bytes());
+        mac.update(&payload);
+        let expected = hex::encode(mac.finalize().into_bytes());
+        assert_eq!(
+            expected, stored,
+            "HMAC chain breaks at line {i} — daemon and CLI verify must agree on field order"
+        );
+        prev = stored;
+    }
 }

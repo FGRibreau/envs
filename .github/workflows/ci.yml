@@ -46,3 +46,18 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  integration-docker:
+    name: integration (vaultwarden + rbw + envs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker compose up + run tests
+        run: |
+          docker compose -f tests/integration/docker-compose.test.yml up \
+            --build --abort-on-container-exit --exit-code-from envs-test
+      - name: Dump daemon logs on failure
+        if: failure()
+        run: |
+          docker compose -f tests/integration/docker-compose.test.yml logs envs-test || true
+          docker compose -f tests/integration/docker-compose.test.yml logs vaultwarden || true

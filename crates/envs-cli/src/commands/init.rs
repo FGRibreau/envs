@@ -30,6 +30,12 @@ pub async fn execute(force: bool) -> Result<()> {
     println!("  ✓ {rbw_version}");
 
     println!("\n[3/6] pinentry-touchid (TouchID-gated unlock)...");
+    let was_present = Command::new("pinentry-touchid")
+        .arg("--version")
+        .output()
+        .await
+        .map(|o| o.status.success())
+        .unwrap_or(false);
     ensure_brew_pkg("pinentry-touchid", "jorgelbg/tap/pinentry-touchid").await?;
     let pinentry_version = Command::new("pinentry-touchid")
         .arg("--version")
@@ -38,6 +44,26 @@ pub async fn execute(force: bool) -> Result<()> {
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_else(|_| "pinentry-touchid".into());
     println!("  ✓ {pinentry_version}");
+    // First-run setup: pinentry-touchid wraps pinentry-mac and needs `-fix`
+    // to wire the delegation. Without this, rbw login fails with
+    // "error reading pinentry output: unexpected EOF". Idempotent — safe
+    // to re-run.
+    if !was_present || force {
+        println!("  → Running `pinentry-touchid -fix` (one-time setup)...");
+        let out = Command::new("pinentry-touchid")
+            .arg("-fix")
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .await;
+        match out {
+            Ok(s) if s.success() => println!("  ✓ pinentry-touchid backend wired"),
+            _ => println!(
+                "  ! `pinentry-touchid -fix` exited non-zero — you may need to run it manually"
+            ),
+        }
+    }
     // Bind rbw to pinentry-touchid (idempotent).
     let _ = Command::new("rbw")
         .arg("config")

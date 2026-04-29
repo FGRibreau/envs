@@ -272,11 +272,13 @@ impl HelperHandle {
     }
 }
 
-/// Build a deterministic stub reply from suggested bindings or current profile.
-/// Mirrors the production helper's system-binary detection: scope=ExactArgv
-/// for /usr/bin/*, /bin/*, /sbin/*, /System/*, scope=Any otherwise.
+/// Build a deterministic stub reply. The user's saved profile is authoritative
+/// when present; discovery suggestions are only fallback when nothing is yet
+/// configured. (Real popup shows both and lets the human pick.)
 fn stub_reply(req: PromptRequest) -> HelperReply {
-    let bindings: Vec<Binding> = if !req.suggested_bindings.is_empty() {
+    let bindings: Vec<Binding> = if let Some(profile) = &req.current_profile {
+        profile.bindings.clone()
+    } else if !req.suggested_bindings.is_empty() {
         req.suggested_bindings
             .iter()
             .map(|s| Binding {
@@ -284,8 +286,6 @@ fn stub_reply(req: PromptRequest) -> HelperReply {
                 source: s.source.clone(),
             })
             .collect()
-    } else if let Some(profile) = &req.current_profile {
-        profile.bindings.clone()
     } else {
         Vec::new()
     };
