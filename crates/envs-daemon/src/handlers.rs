@@ -14,12 +14,16 @@ use secrecy::{ExposeSecret, SecretString};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 
 pub struct Handlers {
     pub rule_cache: Arc<RuleCache>,
     pub value_cache: Arc<ValueCache>,
     pub helper: Arc<HelperHandle>,
     pub started_at: Instant,
+    /// Serializes the `unlock → rbw get* → lock` sequence so a concurrent
+    /// resolve cannot lock the vault while another resolve is reading.
+    pub rbw_mutex: Arc<Mutex<()>>,
 }
 
 impl Handlers {
@@ -211,6 +215,46 @@ impl Handlers {
             }
         };
 
+        // Hold the rbw mutex for the entire unlock → get* → lock sequence so a
+        // concurrent resolve cannot race the lock state. We only need to touch
+        // rbw if at least one binding is uncached; figure that out first to
+        // skip the unlock/lock round-trip on a fully-warm cache.
+        let any_uncached = {
+            let mut any = false;
+            for (k, src) in rule.env_keys.iter().zip(rule.sources.iter()) {
+                if self.value_cache.get(k, src).await.is_none() {
+                    any = true;
+                    break;
+                }
+            }
+            any
+        };
+
+        let _rbw_guard = if any_uncached {
+            let guard = self.rbw_mutex.lock().await;
+            // If the vault is locked, unlock it. With pinentry-touchid configured
+            // this is silent against the Keychain (or shows TouchID); without it,
+            // the user will see a pinentry prompt.
+            let unlocked = rbw::check_status().await.unwrap_or(false);
+            if !unlocked {
+                let t0 = Instant::now();
+                if let Err(e) = rbw::unlock().await {
+                    let _ = audit::event("auto_unlock_failed")
+                        .field("rule_id", &rule.id)
+                        .field("error", e.to_string())
+                        .write();
+                    return Err(DaemonError::RbwLocked);
+                }
+                let _ = audit::event("auto_unlock")
+                    .field("rule_id", &rule.id)
+                    .field("duration_ms", t0.elapsed().as_millis() as u64)
+                    .write();
+            }
+            Some(guard)
+        } else {
+            None
+        };
+
         // Resolve each binding to a value (cache or rbw).
         let mut entries: Vec<EnvEntry> = Vec::with_capacity(rule.env_keys.len());
         for (k, src) in rule.env_keys.iter().zip(rule.sources.iter()) {
@@ -233,6 +277,26 @@ impl Handlers {
                 key: k.clone(),
                 value: value.expose_secret().to_string(),
             });
+        }
+
+        // Best-effort lock: we already have the values cached (RAM, 30s TTL).
+        // A failed lock here is a security warning but not a fatal error — the
+        // resolve already succeeded and the caller should not retry.
+        if _rbw_guard.is_some() {
+            match rbw::lock().await {
+                Ok(()) => {
+                    let _ = audit::event("auto_lock")
+                        .field("rule_id", &rule.id)
+                        .write();
+                }
+                Err(e) => {
+                    tracing::warn!(?e, "auto_lock failed");
+                    let _ = audit::event("auto_lock_failed")
+                        .field("rule_id", &rule.id)
+                        .field("error", e.to_string())
+                        .write();
+                }
+            }
         }
 
         Ok(Response::Resolved {

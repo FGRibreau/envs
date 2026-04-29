@@ -1,12 +1,12 @@
 //! `envs init` — bootstrap wizard (idempotent, rejouable).
 
-use crate::error::Result;
+use crate::error::{CliError, Result};
 use tokio::process::Command;
 
 pub async fn execute(force: bool) -> Result<()> {
     println!("envs setup wizard\n");
 
-    println!("[1/5] Checking rbw...");
+    println!("[1/6] Checking rbw...");
     let rbw_ok = Command::new("rbw")
         .arg("--version")
         .output()
@@ -22,7 +22,7 @@ pub async fn execute(force: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("\n[2/5] Checking rbw login state...");
+    println!("\n[2/6] Checking rbw login state...");
     let logged_in = Command::new("rbw")
         .arg("config")
         .arg("show")
@@ -38,7 +38,48 @@ pub async fn execute(force: bool) -> Result<()> {
         println!("  → Then: rbw login");
     }
 
-    println!("\n[3/5] Checking rbw unlock state...");
+    println!("\n[3/6] Checking pinentry-touchid...");
+    // pinentry-touchid is a hard prerequisite: envs auto-locks rbw between
+    // resolves and re-unlocks it on demand. Without pinentry-touchid the user
+    // would type their master password at every cold call — defeats the UX.
+    let pinentry_ok = Command::new("pinentry-touchid")
+        .arg("--version")
+        .output()
+        .await
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !pinentry_ok {
+        println!("  ✗ pinentry-touchid is not installed");
+        println!("  → Run: brew install jorgelbg/tap/pinentry-touchid");
+        println!("  → Then: rbw config set pinentry pinentry-touchid");
+        println!("  (envs auto-locks rbw between resolves; without pinentry-touchid every cold call asks for your master password)");
+        return Err(CliError::BadArgs(
+            "pinentry-touchid is required — install it then re-run `envs init`".into(),
+        ));
+    }
+    println!("  ✓ pinentry-touchid is installed");
+    let pinentry_configured = Command::new("rbw")
+        .arg("config")
+        .arg("show")
+        .output()
+        .await
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .any(|l| l.trim().starts_with("pinentry") && l.contains("pinentry-touchid"))
+        })
+        .unwrap_or(false);
+    if pinentry_configured {
+        println!("  ✓ rbw is configured to use pinentry-touchid");
+    } else {
+        println!("  ! rbw is not configured to use pinentry-touchid");
+        println!("  → Run: rbw config set pinentry pinentry-touchid");
+        return Err(CliError::BadArgs(
+            "rbw must be configured to use pinentry-touchid — see `envs doctor`".into(),
+        ));
+    }
+
+    println!("\n[4/6] Checking rbw unlock state...");
     let unlocked = Command::new("rbw")
         .arg("unlocked")
         .status()
@@ -46,13 +87,12 @@ pub async fn execute(force: bool) -> Result<()> {
         .map(|s| s.success())
         .unwrap_or(false);
     if unlocked {
-        println!("  ✓ vault is unlocked");
+        println!("  ✓ vault is unlocked (envs will lock it again after each resolve)");
     } else {
-        println!("  ! vault is locked");
-        println!("  → Run: rbw unlock");
+        println!("  ! vault is locked (envs will auto-unlock on the first call)");
     }
 
-    println!("\n[4/5] LaunchAgent for envsd...");
+    println!("\n[5/6] LaunchAgent for envsd...");
     match install_launch_agent(force).await {
         Ok(InstallResult::Installed(path)) => println!("  ✓ installed at {}", path.display()),
         Ok(InstallResult::AlreadyInstalled(path)) => {
@@ -66,7 +106,7 @@ pub async fn execute(force: bool) -> Result<()> {
         Err(e) => println!("  ✗ {e}"),
     }
 
-    println!("\n[5/5] Registry sync...");
+    println!("\n[6/6] Registry sync...");
     match sync_registry().await {
         Ok(msg) => println!("  ✓ {msg}"),
         Err(e) => println!("  ! {e} (you can run `envs registry sync` later)"),

@@ -48,6 +48,8 @@ fn start_daemon() -> DaemonHandle {
          case \"$1\" in\n  \
            --version) echo 'rbw-shim 0.0.0'; exit 0 ;;\n  \
            unlocked) exit 0 ;;\n  \
+           lock) exit 0 ;;\n  \
+           unlock) exit 0 ;;\n  \
            get) item=\"$2\"; field=password; if [ \"$3\" = --field ]; then field=\"$4\"; fi; echo \"v-$item-$field\"; exit 0 ;;\n  \
            *) exit 1 ;;\n\
          esac"
@@ -187,6 +189,163 @@ src = "rbw://TEST_KEY"
         }
         other => panic!("expected Resolved, got {other:?}"),
     }
+}
+
+/// Helper: spawn a daemon with an instrumented rbw shim that:
+///   - logs every invocation to <tmp>/rbw.log
+///   - reads/writes a lock-state file <tmp>/rbw.locked (presence = locked)
+///   - `unlock` removes the file (always succeeds)
+///   - `lock` creates the file
+///   - `unlocked` exit 0 if absent, 1 if present
+///   - `get` exits 1 if locked, otherwise echoes "v-<item>-<field>"
+///
+/// `start_locked = true` makes the shim start in the locked state.
+fn start_daemon_with_log(start_locked: bool) -> DaemonHandle {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let socket = tmp.path().join("envsd.sock");
+    let envs_home = tmp.path().join("home");
+    std::fs::create_dir_all(envs_home.join(".envs/state")).unwrap();
+    std::fs::create_dir_all(envs_home.join(".envs/logs")).unwrap();
+    std::fs::create_dir_all(envs_home.join(".envs/profiles")).unwrap();
+
+    let log_path = tmp.path().join("rbw.log");
+    let lock_path = tmp.path().join("rbw.locked");
+    if start_locked {
+        std::fs::write(&lock_path, b"").unwrap();
+    }
+
+    let bin_dir = tmp.path().join("bin");
+    std::fs::create_dir_all(&bin_dir).unwrap();
+    let rbw_path = bin_dir.join("rbw");
+    let mut f = std::fs::File::create(&rbw_path).unwrap();
+    let script = format!(
+        "#!/bin/bash\n\
+         echo \"$@\" >> {log}\n\
+         case \"$1\" in\n  \
+           --version) echo 'rbw-shim 0.0.0'; exit 0 ;;\n  \
+           unlocked) [ -e {lock} ] && exit 1 || exit 0 ;;\n  \
+           unlock) rm -f {lock}; exit 0 ;;\n  \
+           lock) touch {lock}; exit 0 ;;\n  \
+           get)\n    \
+             [ -e {lock} ] && {{ echo 'Error: vault is Locked' >&2; exit 1; }}\n    \
+             item=\"$2\"; field=password; if [ \"$3\" = --field ]; then field=\"$4\"; fi\n    \
+             echo \"v-$item-$field\"; exit 0 ;;\n  \
+           *) exit 1 ;;\n\
+         esac",
+        log = log_path.display(),
+        lock = lock_path.display()
+    );
+    writeln!(f, "{script}").unwrap();
+    drop(f);
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&rbw_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    // Plant a profile so the helper-stub fills bindings.
+    std::fs::write(
+        envs_home.join(".envs/profiles/envsd.toml"),
+        r#"
+schema = 1
+[binary]
+name = "envsd"
+[[binding]]
+env = "TEST_KEY"
+src = "rbw://TEST_KEY"
+"#,
+    )
+    .unwrap();
+
+    let bin = env!("CARGO_BIN_EXE_envsd");
+    let path_var = format!(
+        "{}:{}",
+        bin_dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    let child = Command::new(bin)
+        .env("HOME", &envs_home)
+        .env("ENVS_SOCKET", &socket)
+        .env("ENVS_HELPER_STUB", "1")
+        .env("PATH", &path_var)
+        .env("RUST_LOG", "envsd=warn")
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn envsd");
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while Instant::now() < deadline && !socket.exists() {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(socket.exists(), "envsd did not create socket");
+
+    DaemonHandle {
+        child,
+        socket,
+        _tmp: tmp,
+    }
+}
+
+fn build_resolve_request(canon: &std::path::Path) -> Request {
+    Request::Resolve {
+        canon_path: canon.to_path_buf(),
+        sha256: "deadbeef".into(),
+        codesign_team: None,
+        argv: vec!["envsd".into()],
+        cwd: std::env::temp_dir(),
+        project_root: None,
+        client_pid: std::process::id() as i32,
+        profiles: Vec::new(),
+        extra_bindings: Vec::new(),
+    }
+}
+
+#[tokio::test]
+async fn auto_lock_locks_rbw_after_resolve() {
+    // Daemon starts unlocked; after a successful Resolve, vault must be locked.
+    let h = start_daemon_with_log(false);
+    let canon = std::path::PathBuf::from(env!("CARGO_BIN_EXE_envsd"));
+
+    let resp = send(&h.socket, &build_resolve_request(&canon)).await;
+    assert!(
+        matches!(resp, Response::Resolved { .. }),
+        "expected Resolved, got {resp:?}"
+    );
+
+    // Inspect the rbw shim log: lock must have been called after get.
+    let log = std::fs::read_to_string(h._tmp.path().join("rbw.log")).unwrap_or_default();
+    assert!(log.contains("\nlock\n") || log.starts_with("lock"), "rbw lock not invoked, log was: {log}");
+    let lock_pos = log.find("lock\n").unwrap();
+    let get_pos = log.find("get").expect("rbw get should have been called");
+    assert!(get_pos < lock_pos, "lock must come AFTER get, log: {log}");
+
+    // The lock-state file must exist (vault locked).
+    assert!(h._tmp.path().join("rbw.locked").exists(), "vault should be locked");
+}
+
+#[tokio::test]
+async fn auto_unlock_retries_on_locked_vault() {
+    // Daemon starts with vault locked; on Resolve, daemon must unlock automatically
+    // then resolve successfully. After resolve, lock again.
+    let h = start_daemon_with_log(true);
+    let canon = std::path::PathBuf::from(env!("CARGO_BIN_EXE_envsd"));
+
+    let resp = send(&h.socket, &build_resolve_request(&canon)).await;
+    match resp {
+        Response::Resolved { entries, .. } => {
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].key, "TEST_KEY");
+        }
+        other => panic!("expected Resolved, got {other:?}"),
+    }
+
+    let log = std::fs::read_to_string(h._tmp.path().join("rbw.log")).unwrap_or_default();
+    let unlock_pos = log.find("unlock\n").expect("rbw unlock should have been called");
+    let get_pos = log.find("get").expect("rbw get should have been called");
+    let lock_pos = log.rfind("lock\n").expect("rbw lock should have been called");
+    assert!(unlock_pos < get_pos, "unlock must come BEFORE get, log: {log}");
+    assert!(get_pos < lock_pos, "lock must come AFTER get, log: {log}");
+    // Final state: locked again.
+    assert!(h._tmp.path().join("rbw.locked").exists(), "vault should end locked");
 }
 
 #[tokio::test]

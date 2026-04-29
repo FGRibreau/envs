@@ -55,6 +55,8 @@ fn start_daemon() -> DaemonHandle {
          case \"$1\" in\n  \
            --version) echo 'rbw-shim 0.0.0'; exit 0 ;;\n  \
            unlocked) exit 0 ;;\n  \
+           lock) exit 0 ;;\n  \
+           unlock) exit 0 ;;\n  \
            get) item=\"$2\"; field=password; if [ \"$3\" = --field ]; then field=\"$4\"; fi; echo \"v-$item-$field\"; exit 0 ;;\n  \
            *) exit 1 ;;\n\
          esac"

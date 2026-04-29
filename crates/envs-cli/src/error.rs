@@ -78,7 +78,7 @@ pub fn format_user_error(e: &CliError) -> String {
                 "envs: refused — {message}\n  hint: wrap the binary with a personal script under ~/bin/, or use scope=ExactArgv"
             ),
             ErrorCode::RbwLocked => {
-                "envs: Bitwarden vault is locked. Run `rbw unlock` first.".into()
+                "envs: vault locked and auto-unlock failed. Run `envs doctor` to verify pinentry-touchid is installed and configured (`rbw config set pinentry pinentry-touchid`).".into()
             }
             ErrorCode::RbwNotInstalled => {
                 "envs: rbw is not installed. Run `brew install rbw`.".into()

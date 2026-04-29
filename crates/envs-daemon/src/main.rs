@@ -73,6 +73,7 @@ async fn main() -> anyhow::Result<()> {
         value_cache: value_cache.clone(),
         helper: helper.clone(),
         started_at: Instant::now(),
+        rbw_mutex: Arc::new(tokio::sync::Mutex::new(())),
     });
 
     // Sweep task: every 30s, purge expired rules and value cache entries.

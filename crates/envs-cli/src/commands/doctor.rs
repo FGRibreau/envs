@@ -10,6 +10,11 @@ pub async fn execute() -> Result<()> {
     println!("envs doctor — diagnostics\n");
 
     print_check("rbw installed", check_rbw_installed().await);
+    print_check("pinentry-touchid installed", check_pinentry_installed().await);
+    print_check(
+        "rbw uses pinentry-touchid",
+        check_rbw_pinentry_configured().await,
+    );
     print_check("rbw unlocked", check_rbw_unlocked().await);
     print_check("~/.envs/ exists", check_envs_dir());
     print_check("envsd socket present", check_socket_present().await);
@@ -17,6 +22,34 @@ pub async fn execute() -> Result<()> {
     print_check("Xcode CLI tools", check_xcode_cli().await);
 
     Ok(())
+}
+
+async fn check_pinentry_installed() -> std::result::Result<String, String> {
+    let output = Command::new("pinentry-touchid").arg("--version").output().await;
+    match output {
+        Ok(o) if o.status.success() => Ok(String::from_utf8_lossy(&o.stdout).trim().to_string()),
+        Ok(_) => Err("pinentry-touchid exited non-zero".into()),
+        Err(_) => Err("pinentry-touchid not on PATH (try: brew install jorgelbg/tap/pinentry-touchid)".into()),
+    }
+}
+
+async fn check_rbw_pinentry_configured() -> std::result::Result<String, String> {
+    let output = Command::new("rbw").arg("config").arg("show").output().await;
+    match output {
+        Ok(o) if o.status.success() => {
+            let text = String::from_utf8_lossy(&o.stdout);
+            let line = text
+                .lines()
+                .find(|l| l.trim().starts_with("pinentry"))
+                .unwrap_or("");
+            if line.contains("pinentry-touchid") {
+                Ok(line.trim().to_string())
+            } else {
+                Err("pinentry not set to pinentry-touchid (try: rbw config set pinentry pinentry-touchid)".into())
+            }
+        }
+        _ => Err("rbw config show failed".into()),
+    }
 }
 
 async fn check_rbw_installed() -> std::result::Result<String, String> {

@@ -102,6 +102,51 @@ pub async fn check_status() -> Result<bool> {
     Ok(output.status.success())
 }
 
+/// Lock the vault (`rbw lock`). Idempotent — calling it on an already-locked
+/// vault is a no-op. Used after every successful resolve so the vault never
+/// stays unlocked across same-UID processes for longer than envs needs it.
+pub async fn lock() -> Result<()> {
+    let output = Command::new("rbw")
+        .arg("lock")
+        .output()
+        .await
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                DaemonError::RbwNotInstalled
+            } else {
+                DaemonError::Io(e)
+            }
+        })?;
+    if !output.status.success() {
+        return Err(DaemonError::RbwLookupFailed(format!(
+            "rbw lock failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    Ok(())
+}
+
+/// Unlock the vault (`rbw unlock`). Blocks on pinentry — with
+/// `pinentry-touchid` configured this resolves silently against the macOS
+/// Keychain (or shows a TouchID prompt). envs never sees the master password.
+pub async fn unlock() -> Result<()> {
+    let output = Command::new("rbw")
+        .arg("unlock")
+        .output()
+        .await
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                DaemonError::RbwNotInstalled
+            } else {
+                DaemonError::Io(e)
+            }
+        })?;
+    if !output.status.success() {
+        return Err(DaemonError::RbwLocked);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

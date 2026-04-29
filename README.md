@@ -102,12 +102,16 @@ Three Rust binaries cooperate over Unix domain sockets and stdin/stdout pipes: *
 
 ```bash
 brew install rbw                                # Bitwarden CLI backend
+brew install jorgelbg/tap/pinentry-touchid      # required: TouchID-gated unlock
 rbw config set email you@example.com
+rbw config set pinentry pinentry-touchid
 rbw login && rbw unlock
 
 cargo install envs-cli envs-daemon envs-prompt
 envs init                                       # one-time setup wizard
 ```
+
+> `pinentry-touchid` is **required**. envs auto-locks rbw between every resolve and re-unlocks it on demand; without pinentry-touchid every cold call would prompt for your master password.
 
 ### Homebrew (once tapped)
 
@@ -172,6 +176,8 @@ See `envs --help` for the full surface (`run`, `init`, `doctor`, `rules`, `proje
 ## Security model
 
 `envs` is a **consent gate**, not a sandbox. It guarantees that no secret enters a subprocess without your explicit, biometric-verified authorization. After the grant, the secret is in the child's `environ` and could be read by any other same-UID process — that's a macOS limitation, not an `envs` choice.
+
+`envsd` also **auto-locks `rbw` between every resolve** and re-unlocks it on demand via `pinentry-touchid` (TouchID + macOS Keychain). The same-UID rbw-agent side channel — historically the largest gap, since once `rbw` is unlocked any process under your UID can `rbw get *` for the next hour — is now closed. A malicious process attempting `rbw get` outside an envs grant triggers an unexpected pinentry-touchid prompt, which acts as a tripwire.
 
 <p align="center"><img src="assets/security-boundary.svg" alt="Security boundary diagram: the green zone (vault → TouchID → child process) is fully gated by envs; the amber zone (sibling same-UID processes able to read the child's environ post-grant) is deliberately out of scope on macOS without paid Apple entitlements" width="900"/></p>
 
