@@ -4,9 +4,9 @@ use crate::client;
 use crate::error::{CliError, Result};
 use crate::exec;
 use crate::manifest;
-use envs_proto::{Binding, Request, Response};
+use envs_proto::{Binding, EnvEntry, ErrorCode, Request, Response};
 use sha2::{Digest, Sha256};
-use std::io::Read;
+use std::io::{BufRead, Read, Write};
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
@@ -36,26 +36,60 @@ pub async fn execute(argv: Vec<String>, profiles: &[String], binds: &[String]) -
     let project_root = manifest::find_project_root(&cwd);
     let pid = std::process::id() as i32;
 
-    let req = Request::Resolve {
-        canon_path: canon_path.clone(),
-        sha256,
-        codesign_team,
-        argv: argv.clone(),
-        cwd,
-        project_root,
-        client_pid: pid,
-        profiles: profiles.to_vec(),
-        extra_bindings,
-    };
-
-    let resp = client::send_request(&req).await?;
-    let entries = match resp {
-        Response::Resolved { entries, .. } => entries,
-        other => {
-            return Err(CliError::Internal(format!(
-                "unexpected daemon response: {other:?}"
-            )))
+    // Try resolving once. If the daemon reports BinaryNotInProfile (no
+    // suggestions, no profile, no inline binds) AND we're attached to a TTY,
+    // prompt the user inline for KEY=rbw://... pairs and retry. This is the
+    // CLI-side equivalent of the popup's "+ Add custom binding" affordance —
+    // the AppKit popup arrives in v0.4 but users still need to authorise
+    // unknown binaries today.
+    let entries = match try_resolve(
+        &canon_path,
+        sha256.clone(),
+        codesign_team.clone(),
+        &argv,
+        &cwd,
+        project_root.as_deref(),
+        pid,
+        profiles,
+        &extra_bindings,
+    )
+    .await
+    {
+        Ok(entries) => entries,
+        Err(CliError::Daemon {
+            code: ErrorCode::BinaryNotInProfile,
+            message,
+        }) => {
+            let typed_name = argv
+                .first()
+                .and_then(|s| Path::new(s).file_name().and_then(|f| f.to_str()))
+                .unwrap_or(message.as_str())
+                .to_string();
+            let added = prompt_for_bindings_interactively(&typed_name)?;
+            if added.is_empty() {
+                return Err(CliError::Daemon {
+                    code: ErrorCode::BinaryNotInProfile,
+                    message,
+                });
+            }
+            let mut combined = extra_bindings.clone();
+            combined.extend(added.iter().cloned());
+            let entries = try_resolve(
+                &canon_path,
+                sha256,
+                codesign_team,
+                &argv,
+                &cwd,
+                project_root.as_deref(),
+                pid,
+                profiles,
+                &combined,
+            )
+            .await?;
+            offer_to_save_profile(&typed_name, project_root.as_deref(), &added)?;
+            entries
         }
+        Err(e) => return Err(e),
     };
 
     let injected: Vec<(String, secrecy::SecretString)> = entries
@@ -72,6 +106,135 @@ pub async fn execute(argv: Vec<String>, profiles: &[String], binds: &[String]) -
 
     let _: std::convert::Infallible = exec::run(exec::ExecArgs { argv0, args, env })?;
     unreachable!("execve replaces the current process on success")
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn try_resolve(
+    canon_path: &Path,
+    sha256: String,
+    codesign_team: Option<String>,
+    argv: &[String],
+    cwd: &Path,
+    project_root: Option<&Path>,
+    client_pid: i32,
+    profiles: &[String],
+    extra_bindings: &[Binding],
+) -> Result<Vec<EnvEntry>> {
+    let req = Request::Resolve {
+        canon_path: canon_path.to_path_buf(),
+        sha256,
+        codesign_team,
+        argv: argv.to_vec(),
+        cwd: cwd.to_path_buf(),
+        project_root: project_root.map(Path::to_path_buf),
+        client_pid,
+        profiles: profiles.to_vec(),
+        extra_bindings: extra_bindings.to_vec(),
+    };
+    match client::send_request(&req).await? {
+        Response::Resolved { entries, .. } => Ok(entries),
+        other => Err(CliError::Internal(format!(
+            "unexpected daemon response: {other:?}"
+        ))),
+    }
+}
+
+/// Interactive fallback when the daemon reports BinaryNotInProfile. Reads
+/// `KEY=rbw://item[/field]` lines from stdin until an empty line. Validates
+/// each entry the same way `--bind` does and prints a one-line summary.
+fn prompt_for_bindings_interactively(typed_name: &str) -> Result<Vec<Binding>> {
+    eprintln!();
+    eprintln!(
+        "envs: no bindings discovered for `{typed_name}` and `--help` parsing came up empty."
+    );
+    eprintln!("Add bindings now (one per line, empty line to finish):");
+    eprintln!("  Format: KEY=rbw://item-name[/field]");
+    eprintln!("  Example: GITHUB_TOKEN=rbw://GitHub/token");
+    eprintln!();
+
+    let stdin = std::io::stdin();
+    let mut handle = stdin.lock();
+    let mut bindings: Vec<Binding> = Vec::new();
+    loop {
+        eprint!("  > ");
+        std::io::stderr().flush()?;
+        let mut line = String::new();
+        let n = handle.read_line(&mut line)?;
+        if n == 0 {
+            break; // EOF
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            break;
+        }
+        match parse_bindings(&[trimmed.to_string()]) {
+            Ok(mut parsed) => bindings.append(&mut parsed),
+            Err(e) => {
+                eprintln!("    ✗ {} — try again", crate::error::format_user_error(&e));
+            }
+        }
+    }
+    if bindings.is_empty() {
+        eprintln!("(no bindings entered — aborting)");
+    } else {
+        eprintln!("✓ added {} binding(s)", bindings.len());
+    }
+    Ok(bindings)
+}
+
+/// After a successful interactive add, offer to persist the bindings as a
+/// project profile (if a `.envs/` exists upward from cwd) or a global one.
+/// Skipping is the safe default — users can re-prompt next invocation.
+fn offer_to_save_profile(
+    binary_name: &str,
+    project_root: Option<&Path>,
+    bindings: &[Binding],
+) -> Result<()> {
+    if bindings.is_empty() {
+        return Ok(());
+    }
+    let target = match project_root {
+        Some(root) => root.join(".envs").join(format!("{binary_name}.toml")),
+        None => {
+            let home = match dirs::home_dir() {
+                Some(h) => h,
+                None => return Ok(()),
+            };
+            home.join(".envs")
+                .join("profiles")
+                .join(format!("{binary_name}.toml"))
+        }
+    };
+    if target.exists() {
+        // Don't overwrite an existing profile silently.
+        return Ok(());
+    }
+    eprint!("Save these bindings as `{}`? [Y/n] ", target.display());
+    std::io::stderr().flush()?;
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer)?;
+    let yes = answer.trim().is_empty()
+        || answer.trim().eq_ignore_ascii_case("y")
+        || answer.trim().eq_ignore_ascii_case("yes");
+    if !yes {
+        eprintln!("(skipped — re-enter next time, or write the toml manually)");
+        return Ok(());
+    }
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut content = String::new();
+    content.push_str("schema = 1\n\n");
+    content.push_str("[binary]\n");
+    content.push_str(&format!("name = \"{binary_name}\"\n\n"));
+    for b in bindings {
+        content.push_str("[[binding]]\n");
+        content.push_str(&format!("env = \"{}\"\n", b.env));
+        content.push_str(&format!("src = \"{}\"\n\n", b.source));
+    }
+    std::fs::write(&target, content)?;
+    eprintln!("✓ wrote {}", target.display());
+    Ok(())
 }
 
 /// Parse `--bind KEY=rbw://item/field` strings into `Binding` structs.
