@@ -52,6 +52,11 @@ const DURATION_CHOICES: &[(&str, u64)] = &[
 pub struct SharedQueues {
     pub incoming: Mutex<std::collections::VecDeque<envs_proto::HelperEvent>>,
     pub outgoing: Mutex<std::collections::VecDeque<HelperReply>>,
+    /// Last known active-rules count from envsd /status. Updated by a
+    /// background poller thread (see [`spawn_status_poller`]); read by the
+    /// AppKit main thread when rebuilding the NSStatusItem menu.
+    /// `usize::MAX` is used as a "never polled / unknown" sentinel.
+    pub active_rules: std::sync::atomic::AtomicUsize,
 }
 
 impl SharedQueues {
@@ -59,8 +64,28 @@ impl SharedQueues {
         Self {
             incoming: Mutex::new(std::collections::VecDeque::new()),
             outgoing: Mutex::new(std::collections::VecDeque::new()),
+            active_rules: std::sync::atomic::AtomicUsize::new(usize::MAX),
         }
     }
+}
+
+/// Background thread polling envsd /status every `interval`. Updates
+/// `queues.active_rules` on every successful poll. Failures are logged at
+/// debug level — the menubar simply stays at the last good value.
+pub fn spawn_status_poller(queues: Arc<SharedQueues>, interval: std::time::Duration) {
+    std::thread::spawn(move || loop {
+        match crate::client::query_status() {
+            Ok(snap) => {
+                queues
+                    .active_rules
+                    .store(snap.rules_count, std::sync::atomic::Ordering::Relaxed);
+            }
+            Err(e) => {
+                tracing::debug!(?e, "status poll failed (daemon down?)");
+            }
+        }
+        std::thread::sleep(interval);
+    });
 }
 
 /// Ivars stored on the AppDelegate Objective-C instance.
@@ -81,6 +106,9 @@ pub struct Ivars {
     ///   [N+2] = save-target NSPopUpButton (Project/Global)
     /// Cleared and rebuilt each time we switch tabs.
     pub current_controls: RefCell<Vec<Retained<NSObject>>>,
+    /// "Active rules: N" menu item, kept around so the status-poll timer
+    /// can mutate its title in-place instead of rebuilding the whole menu.
+    pub active_rules_item: RefCell<Option<Retained<objc2_app_kit::NSMenuItem>>>,
 }
 
 declare_class!(
@@ -157,6 +185,21 @@ declare_class!(
             let app = NSApplication::sharedApplication(mtm);
             unsafe { app.terminate(None) };
         }
+
+        /// NSTimer callback (every 1s): refresh the "Active rules: N" menu
+        /// item from the latest atomic value written by the poller thread.
+        #[method(refreshStatusMenu:)]
+        fn refresh_status_menu_timer(&self, _timer: *mut NSObject) {
+            self.refresh_status_menu();
+        }
+
+        /// One-shot NSTimer callback used by the tab disappear animation:
+        /// after the alpha fade completes, drop the active tab and rebuild
+        /// (or hide the window when no tabs remain).
+        #[method(finishTabRemoval:)]
+        fn finish_tab_removal_timer(&self, _timer: *mut NSObject) {
+            self.finish_tab_removal();
+        }
     }
 );
 
@@ -171,6 +214,7 @@ impl EnvsAppDelegate {
             active_tab: RefCell::new(0),
             content_holder: RefCell::new(None),
             current_controls: RefCell::new(Vec::new()),
+            active_rules_item: RefCell::new(None),
         };
         let alloc = mtm.alloc::<Self>();
         let obj = alloc.set_ivars(ivars);
@@ -197,9 +241,9 @@ impl EnvsAppDelegate {
     }
 
     /// Build the right-click menu attached to the status item. Keeps the
-    /// surface intentionally small (Show, Quit) — the popup window itself
-    /// holds the per-request controls; the menu is just for app-level
-    /// affordances.
+    /// surface intentionally small (Show, Active rules info, Quit) — the
+    /// popup window itself holds the per-request controls; the menu is
+    /// just for app-level affordances and at-a-glance status.
     fn build_status_menu(&self, mtm: MainThreadMarker) -> Retained<objc2_app_kit::NSMenu> {
         use objc2_app_kit::NSMenu;
         use objc2_app_kit::NSMenuItem;
@@ -221,8 +265,24 @@ impl EnvsAppDelegate {
         }
 
         // Separator
-        let sep = NSMenuItem::separatorItem(mtm);
-        menu.addItem(&sep);
+        menu.addItem(&NSMenuItem::separatorItem(mtm));
+
+        // Active rules: N (disabled — informational, refreshed by NSTimer)
+        let rules_item = unsafe {
+            NSMenuItem::initWithTitle_action_keyEquivalent(
+                mtm.alloc::<NSMenuItem>(),
+                &NSString::from_str("Active rules: …"),
+                None,
+                &NSString::from_str(""),
+            )
+        };
+        unsafe { rules_item.setEnabled(false) };
+        menu.addItem(&rules_item);
+        // Stash the menu item so refresh_status_menu can update its title in place.
+        *self.ivars().active_rules_item.borrow_mut() = Some(rules_item);
+
+        // Separator
+        menu.addItem(&NSMenuItem::separatorItem(mtm));
 
         // Quit envs-prompt
         let quit = unsafe {
@@ -239,6 +299,24 @@ impl EnvsAppDelegate {
         }
 
         menu
+    }
+
+    /// NSTimer callback: rebuild the "Active rules: N" menu item title
+    /// from the most recent poll. Cheap; safe to run every second.
+    fn refresh_status_menu(&self) {
+        let count = self
+            .ivars()
+            .queues
+            .active_rules
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let label = if count == usize::MAX {
+            "Active rules: …".to_string() // never polled (daemon down?)
+        } else {
+            format!("Active rules: {count}")
+        };
+        if let Some(item) = self.ivars().active_rules_item.borrow().as_deref() {
+            unsafe { item.setTitle(&NSString::from_str(&label)) };
+        }
     }
 
     pub fn install_window(&self, mtm: MainThreadMarker) {
@@ -265,6 +343,22 @@ impl EnvsAppDelegate {
             win.setFrameAutosaveName(&NSString::from_str("envs.popup.frame"));
         }
         *self.ivars().window.borrow_mut() = Some(win);
+    }
+
+    /// 1s NSTimer that refreshes the "Active rules: N" menubar entry from
+    /// the atomic written by the background poller. Cheap and bounded so
+    /// running it on every popup session is fine.
+    pub fn schedule_status_menu_timer(&self, mtm: MainThreadMarker) {
+        let _ = mtm;
+        let _: () = unsafe {
+            let _timer = NSTimer::scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(
+                1.0,
+                self,
+                sel!(refreshStatusMenu:),
+                None,
+                true,
+            );
+        };
     }
 
     pub fn schedule_drain_timer(&self, mtm: MainThreadMarker) {
@@ -347,13 +441,26 @@ impl EnvsAppDelegate {
                 self.show_window();
             }
             HelperEvent::CancelRequest { request_id } => {
-                let mut tabs = self.ivars().tabs.borrow_mut();
-                tabs.retain(|t| t.request.request_id != request_id);
-                drop(tabs);
-                self.refresh_status_title();
-                self.rebuild_window_content();
-                if self.ivars().tabs.borrow().is_empty() {
-                    self.hide_window();
+                // Find the position of the cancelled request. If it's the
+                // active tab, animate it out; otherwise remove silently.
+                let active = *self.ivars().active_tab.borrow();
+                let pos = self
+                    .ivars()
+                    .tabs
+                    .borrow()
+                    .iter()
+                    .position(|t| t.request.request_id == request_id);
+                let Some(idx) = pos else { return };
+                if idx == active {
+                    self.animate_remove_active_tab();
+                } else {
+                    self.ivars().tabs.borrow_mut().remove(idx);
+                    self.refresh_status_title();
+                    if self.ivars().tabs.borrow().is_empty() {
+                        self.hide_window();
+                    } else {
+                        self.rebuild_window_content();
+                    }
                 }
             }
             HelperEvent::PendingCountChanged { count: _ } => {
@@ -765,6 +872,75 @@ impl EnvsAppDelegate {
         self.rebuild_window_content();
     }
 
+    /// Animate the active tab's alpha to 0 over ~200ms, then remove it
+    /// from the model and rebuild the popup. Uses NSAnimationContext (no
+    /// completion block needed — the cleanup is scheduled separately via
+    /// NSTimer to keep the unsafe surface small).
+    fn animate_remove_active_tab(&self) {
+        use objc2_app_kit::NSAnimationContext;
+
+        // Capture the active tab's index up-front; the user might have
+        // clicked Cancel + Authorize quickly in succession, but we always
+        // act on whichever tab is currently active.
+        let active_idx = *self.ivars().active_tab.borrow();
+        let tabs_len = self.ivars().tabs.borrow().len();
+        if active_idx >= tabs_len {
+            return;
+        }
+
+        // Fade the *whole* outer content view — simpler than locating the
+        // single tab button inside the side stack, and visually conveys
+        // "this request is done" before the rebuild redraws everything.
+        if let Some(holder) = self.ivars().content_holder.borrow().as_deref() {
+            unsafe {
+                NSAnimationContext::beginGrouping();
+                let ctx = NSAnimationContext::currentContext();
+                ctx.setDuration(0.2);
+                let animator: Retained<NSStackView> = msg_send_id![holder, animator];
+                let _: () = msg_send![&*animator, setAlphaValue: 0.0_f64];
+                NSAnimationContext::endGrouping();
+            }
+        }
+
+        // Schedule the actual removal + rebuild after the animation finishes.
+        // 220ms = animation duration + a small buffer for the run loop to
+        // flush the alpha change before we swap the contentView.
+        let _: () = unsafe {
+            let _t = NSTimer::scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(
+                0.22,
+                self,
+                sel!(finishTabRemoval:),
+                None,
+                false,
+            );
+        };
+    }
+
+    /// NSTimer callback that runs after `animate_remove_active_tab` — pops
+    /// the active tab out of the model and rebuilds the window (or hides
+    /// it when no tabs remain). Idempotent: safe if active_tab moved.
+    fn finish_tab_removal(&self) {
+        let active_idx = *self.ivars().active_tab.borrow();
+        {
+            let mut tabs = self.ivars().tabs.borrow_mut();
+            if active_idx < tabs.len() {
+                tabs.remove(active_idx);
+            }
+            if !tabs.is_empty() {
+                let new_active = active_idx.min(tabs.len() - 1);
+                *self.ivars().active_tab.borrow_mut() = new_active;
+            } else {
+                *self.ivars().active_tab.borrow_mut() = 0;
+            }
+        }
+        self.refresh_status_title();
+        if self.ivars().tabs.borrow().is_empty() {
+            self.hide_window();
+        } else {
+            self.rebuild_window_content();
+        }
+    }
+
     fn handle_tab_click(&self, sender: *mut NSButton) {
         if sender.is_null() {
             return;
@@ -940,16 +1116,28 @@ impl EnvsAppDelegate {
     }
 
     fn complete_tab(&self, idx: usize, reply: HelperReply) {
+        // Send the reply to envsd immediately (don't wait for the animation).
         self.send_reply(reply);
-        self.ivars().tabs.borrow_mut().remove(idx);
-        // Reset active to 0
-        *self.ivars().active_tab.borrow_mut() = 0;
-        let now_empty = self.ivars().tabs.borrow().is_empty();
-        self.refresh_status_title();
-        if now_empty {
-            self.hide_window();
+        // If the tab being completed is the one currently visible, kick the
+        // disappear animation: fade contentView, then NSTimer pops the tab
+        // and rebuilds. For tabs in the side panel that aren't active (e.g.
+        // a remote CancelRequest for a queued tab), there's nothing to fade
+        // — just remove and refresh in place.
+        let active = *self.ivars().active_tab.borrow();
+        if idx == active {
+            self.animate_remove_active_tab();
         } else {
-            self.rebuild_window_content();
+            let mut tabs = self.ivars().tabs.borrow_mut();
+            if idx < tabs.len() {
+                tabs.remove(idx);
+            }
+            drop(tabs);
+            self.refresh_status_title();
+            if self.ivars().tabs.borrow().is_empty() {
+                self.hide_window();
+            } else {
+                self.rebuild_window_content();
+            }
         }
     }
 

@@ -24,14 +24,15 @@
 use envs_proto::{Binding, GrantScope, HelperEvent, HelperReply, ProfileTarget, PromptRequest};
 use std::io::{BufRead, Write};
 
+#[cfg(target_os = "macos")]
+mod app;
 mod auth;
+#[cfg(target_os = "macos")]
+mod client;
 #[cfg(target_os = "macos")]
 mod dialog;
 #[cfg(target_os = "macos")]
 mod rbw;
-
-#[cfg(target_os = "macos")]
-mod app;
 
 fn main() -> anyhow::Result<()> {
     init_tracing();
@@ -111,11 +112,16 @@ fn run_native_mode() -> anyhow::Result<()> {
 
     let queues = Arc::new(app::SharedQueues::new());
 
+    // Background thread polling envsd every 5s for active-rules count.
+    // Rate is generous: status is informational only, not user-driven.
+    app::spawn_status_poller(queues.clone(), std::time::Duration::from_secs(5));
+
     // Create the AppDelegate (owns NSWindow + NSStatusItem + tab state).
     let delegate = app::EnvsAppDelegate::new(mtm, queues.clone());
     delegate.install_status_item(mtm);
     delegate.install_window(mtm);
     delegate.schedule_drain_timer(mtm);
+    delegate.schedule_status_menu_timer(mtm);
 
     // Background thread: read stdin → push to queues.incoming
     let incoming_queue = queues.clone();

@@ -25,6 +25,7 @@ tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
+dirs = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.5"
@@ -39,6 +40,6 @@ objc2-app-kit = { version = "0.2", features = [
     "NSStatusBar", "NSStatusItem", "NSStatusBarButton", "NSImage",
     "NSCell", "NSControl", "NSGraphics", "NSFont",
     "NSPopUpButton", "NSMenu", "NSMenuItem", "NSEvent",
-    "NSUserInterfaceLayout",
+    "NSUserInterfaceLayout", "NSAnimationContext",
 ] }
 block2 = "0.5"

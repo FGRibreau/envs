@@ -588,6 +588,7 @@ dependencies = [
  "anyhow",
  "block2",
  "chrono",
+ "dirs",
  "envs-proto",
  "objc2",
  "objc2-app-kit",
