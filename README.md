@@ -21,6 +21,68 @@
 
 ---
 
+## Sponsors
+
+<table>
+  <tr>
+    <td align="center" width="175">
+      <a href="https://france-nuage.fr/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=france-nuage&mtm_content=envs">
+        <img src="assets/sponsors/france-nuage.svg" height="60" alt="France-Nuage"/><br/>
+        <b>France-Nuage</b>
+      </a><br/>
+      <sub>Sovereign French cloud. Same 12-factor configs, no US vendor lock-in.</sub>
+    </td>
+    <td align="center" width="175">
+      <a href="https://www.hook0.com/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=hook0&mtm_content=envs">
+        <img src="assets/sponsors/hook0.png" height="60" alt="Hook0"/><br/>
+        <b>Hook0</b>
+      </a><br/>
+      <sub>Add webhooks to your app in minutes. Open-source, self-hostable.</sub>
+    </td>
+    <td align="center" width="175">
+      <a href="https://getnatalia.com/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=natalia&mtm_content=envs">
+        <img src="assets/sponsors/natalia.svg" height="60" alt="Natalia"/><br/>
+        <b>Natalia</b>
+      </a><br/>
+      <sub>While you tune env vars, Natalia qualifies inbound calls 24/7.</sub>
+    </td>
+    <td align="center" width="175">
+      <a href="https://netir.fr/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=netir&mtm_content=envs">
+        <img src="assets/sponsors/netir.svg" height="60" alt="Netir"/><br/>
+        <b>Netir</b>
+      </a><br/>
+      <sub>Vetted French freelance devs with mentorship. Hire or get hired.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="233">
+      <a href="https://nobullshitconseil.com/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=nbc&mtm_content=envs">
+        <img src="assets/sponsors/nobullshitconseil.svg" height="60" alt="NoBullshitConseil"/><br/>
+        <b>NoBullshitConseil</b>
+      </a><br/>
+      <sub>No-bullshit tech advisory. Founders &amp; CTOs get unstuck fast.</sub>
+    </td>
+    <td align="center" width="233">
+      <a href="https://qualneo.fr/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=qualneo&mtm_content=envs">
+        <img src="assets/sponsors/qualneo.svg" height="60" alt="Qualneo"/><br/>
+        <b>Qualneo</b>
+      </a><br/>
+      <sub>LMS for Qualiopi training orgs. 32 indicators handled for you.</sub>
+    </td>
+    <td align="center" width="233">
+      <a href="https://recapro.ai/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=recapro&mtm_content=envs">
+        <img src="assets/sponsors/recapro.png" height="60" alt="Recapro"/><br/>
+        <b>Recapro</b>
+      </a><br/>
+      <sub>Private AI for meeting transcription &amp; reports. Data stays in France.</sub>
+    </td>
+  </tr>
+</table>
+
+> **Interested in sponsoring?** [Get in touch](mailto:rust@fgribreau.com)
+
+---
+
 ## What is this?
 
 `envs` is a Rust CLI that wraps any other CLI command (`flarectl`, `wrangler`, `aws`, `gh`, `curl`, your own scripts) and injects secrets from your **Bitwarden vault** into the child process's environment — but only after a **TouchID** confirmation popup, only the env vars you authorize, only inside the project directory you allow, and only for the duration you choose (1 minute, 5 minutes, 1 hour…).
@@ -187,68 +249,6 @@ What it does NOT defend against (deliberately):
 - Same-UID exfiltration after a granted run (out of scope on macOS without paid Apple entitlements)
 - A malicious binary you explicitly authorize (the popup IS the consent — choose what you trust)
 - Compromise of your Bitwarden master password / TouchID-protected device
-
----
-
-## Sponsors
-
-<table>
-  <tr>
-    <td align="center" width="175">
-      <a href="https://france-nuage.fr/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=france-nuage&mtm_content=envs">
-        <img src="assets/sponsors/france-nuage.svg" height="60" alt="France-Nuage"/><br/>
-        <b>France-Nuage</b>
-      </a><br/>
-      <sub>Sovereign French cloud. Same 12-factor configs, no US vendor lock-in.</sub>
-    </td>
-    <td align="center" width="175">
-      <a href="https://www.hook0.com/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=hook0&mtm_content=envs">
-        <img src="assets/sponsors/hook0.png" height="60" alt="Hook0"/><br/>
-        <b>Hook0</b>
-      </a><br/>
-      <sub>Add webhooks to your app in minutes. Open-source, self-hostable.</sub>
-    </td>
-    <td align="center" width="175">
-      <a href="https://getnatalia.com/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=natalia&mtm_content=envs">
-        <img src="assets/sponsors/natalia.svg" height="60" alt="Natalia"/><br/>
-        <b>Natalia</b>
-      </a><br/>
-      <sub>While you tune env vars, Natalia qualifies inbound calls 24/7.</sub>
-    </td>
-    <td align="center" width="175">
-      <a href="https://netir.fr/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=netir&mtm_content=envs">
-        <img src="assets/sponsors/netir.svg" height="60" alt="NetIR"/><br/>
-        <b>NetIR</b>
-      </a><br/>
-      <sub>Vetted French freelance devs with mentorship. Hire or get hired.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="233">
-      <a href="https://nobullshitconseil.com/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=nbc&mtm_content=envs">
-        <img src="assets/sponsors/nobullshitconseil.svg" height="60" alt="NoBullshitConseil"/><br/>
-        <b>NoBullshitConseil</b>
-      </a><br/>
-      <sub>No-bullshit tech advisory. Founders &amp; CTOs get unstuck fast.</sub>
-    </td>
-    <td align="center" width="233">
-      <a href="https://qualneo.fr/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=qualneo&mtm_content=envs">
-        <img src="assets/sponsors/qualneo.svg" height="60" alt="Qualneo"/><br/>
-        <b>Qualneo</b>
-      </a><br/>
-      <sub>LMS for Qualiopi training orgs. 32 indicators handled for you.</sub>
-    </td>
-    <td align="center" width="233">
-      <a href="https://recapro.ai/?mtm_source=github&mtm_medium=sponsor&mtm_campaign=recapro&mtm_content=envs">
-        <img src="assets/sponsors/recapro.png" height="60" alt="Recapro"/><br/>
-        <b>Recapro</b>
-      </a><br/>
-      <sub>Private AI for meeting transcription &amp; reports. Data stays in France.</sub>
-    </td>
-  </tr>
-</table>
-
-> **Interested in sponsoring?** [Get in touch](mailto:rust@fgribreau.com)
 
 ---
 
