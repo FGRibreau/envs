@@ -22,12 +22,19 @@ pub async fn execute(action: super::super::DaemonAction) -> Result<()> {
     }
 }
 
-fn launch_agent_path() -> Result<PathBuf> {
+pub(crate) fn launch_agent_path() -> Result<PathBuf> {
     let home = dirs::home_dir().ok_or_else(|| CliError::Internal("no home dir".into()))?;
     Ok(home
         .join("Library")
         .join("LaunchAgents")
         .join("com.fgribreau.envsd.plist"))
+}
+
+/// True when the envsd LaunchAgent plist is on disk — proof that `envs init`
+/// (or `envs daemon install`) ran at least once. Lets the daemon-not-running
+/// error tell "set up but the daemon stopped" apart from "never initialised".
+pub(crate) fn launch_agent_installed() -> bool {
+    launch_agent_path().map(|p| p.exists()).unwrap_or(false)
 }
 
 fn pid_file_path() -> Result<PathBuf> {

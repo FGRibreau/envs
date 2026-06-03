@@ -169,6 +169,8 @@ envs init   # bootstraps everything: brew-installs rbw + pinentry-touchid,
 ```
 
 > `envs init` is the only command you should need. It checks for Homebrew and auto-installs `rbw` and `pinentry-touchid` if missing, then wires `rbw` to use `pinentry-touchid` (so the master password is held by macOS Keychain and gated by TouchID, never by envs). You'll be prompted once for your Bitwarden email and master password; after that the bootstrap is complete.
+>
+> Crucially, `envs init` also installs and starts **`envsd`** — the background daemon that does the actual work (caches grants, talks to your vault via `rbw`, renders the TouchID popup). The `envs` CLI itself is a thin, stateless wrapper, so until `envsd` is running it has nothing to talk to and `envs <cmd>` reports "daemon not running". That's why `init` comes first.
 
 ### Homebrew (once tapped)
 
@@ -199,10 +201,10 @@ for c in cli daemon prompt; do cargo install --path crates/envs-$c; done
 ## Quick Start
 
 ```bash
-# 1. Setup wizard (rbw + LaunchAgent + registry sync)
+# 1. One-time setup: installs rbw + pinentry-touchid + the envsd daemon (the engine)
 envs init
 
-# 2. Verify the daemon is up
+# 2. Confirm the daemon (the engine) is up — nothing resolves without it
 envs daemon status
 
 # 3. First call: native popup → TouchID → secret injected

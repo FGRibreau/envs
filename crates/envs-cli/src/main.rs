@@ -14,7 +14,15 @@ use crate::error::Result;
 #[command(
     name = "envs",
     version,
-    about = "Lulu-style firewall for environment variables (Bitwarden + TouchID)"
+    about = "Lulu-style firewall for environment variables (Bitwarden + TouchID)",
+    long_about = "A TouchID-gated firewall for environment variables.\n\
+        \n\
+        Secrets stay encrypted in Bitwarden; this machine holds only rbw:// pointers.\n\
+        `envs <cmd>` injects them into a single child process after a biometric approval,\n\
+        scoped to that binary, that project, and a short TTL.\n\
+        \n\
+        Three pieces cooperate: the `envs` CLI (this), the `envsd` daemon (cache + vault +\n\
+        audit) and a native popup (consent + TouchID). Run `envs init` once to set them up."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -181,11 +189,61 @@ async fn dispatch(cli: Cli) -> Result<()> {
         None => {
             // Bare invocation: `envs <bin> <args>` shorthand for `envs run -- <bin> <args>`
             if cli.trailing.is_empty() {
-                eprintln!("envs: nothing to run. Try `envs --help` or `envs init`.");
-                std::process::exit(64); // EX_USAGE
+                return handle_no_command().await;
             }
             commands::run::execute(cli.trailing, &cli.profile, &cli.bind).await
         }
+    }
+}
+
+/// Bare `envs` with no command and no trailing args.
+///
+/// If the daemon answers, there's simply nothing to run. If it doesn't, the
+/// user almost certainly hasn't set envs up yet — so instead of a cryptic
+/// one-liner, explain what envs is and why `envs init` is the next step, and
+/// (on a TTY) offer to run it right now. The daemon is the engine: it caches
+/// grants, talks to the vault and shows the TouchID popup, so "daemon
+/// unreachable" is the most reliable first-run signal we have.
+async fn handle_no_command() -> Result<()> {
+    use std::io::Write;
+
+    if client::daemon_reachable().await {
+        // Set up and healthy — nothing to do without a command to wrap.
+        return Err(error::CliError::NothingToRun);
+    }
+
+    eprintln!(
+        "envs — a TouchID-gated firewall for your environment variables.\n\
+         \n\
+         Your secrets stay encrypted in Bitwarden; this machine only holds pointers.\n\
+         `envs <cmd>` injects them into one command, after you approve with TouchID.\n\
+         \n\
+         You're not set up yet. `envs init` installs the pieces envs needs:\n\
+         \x20 • rbw              — the Bitwarden client that decrypts your vault\n\
+         \x20 • pinentry-touchid — puts each vault unlock behind TouchID\n\
+         \x20 • envsd            — the background daemon that caches grants and shows the popup\n"
+    );
+
+    // Only offer the interactive prompt when we actually have a terminal —
+    // otherwise (piped, CI, agent) print guidance and return without blocking.
+    if !nix::unistd::isatty(0).unwrap_or(false) {
+        eprintln!("Run `envs init` to get started.");
+        return Ok(());
+    }
+
+    eprint!("Run `envs init` now? [Y/n] ");
+    std::io::stderr().flush().ok();
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer)?;
+    let trimmed = answer.trim();
+    let yes = trimmed.is_empty()
+        || trimmed.eq_ignore_ascii_case("y")
+        || trimmed.eq_ignore_ascii_case("yes");
+    if yes {
+        commands::init::execute(false).await
+    } else {
+        eprintln!("No problem — run `envs init` when you're ready.");
+        Ok(())
     }
 }
 

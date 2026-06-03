@@ -63,7 +63,18 @@ impl CliError {
 pub fn format_user_error(e: &CliError) -> String {
     match e {
         CliError::DaemonNotRunning => {
-            "envs: daemon is not running. Try `envs init` or start `envsd` manually.".into()
+            // The daemon is the engine (cache + vault + TouchID popup). Whether
+            // the user needs `envs init` (never set up) or just `envs daemon
+            // start` (set up, daemon stopped) hinges on the LaunchAgent plist.
+            if crate::commands::daemon::launch_agent_installed() {
+                "envs: the envsd daemon isn't running — it's the background service that resolves \
+                 secrets, talks to your vault and shows the TouchID popup. Start it: `envs daemon start`."
+                    .into()
+            } else {
+                "envs: not set up yet. envs needs a background daemon (envsd) plus rbw + TouchID to \
+                 release secrets. Run `envs init` to install and start everything (one-time, idempotent)."
+                    .into()
+            }
         }
         CliError::CommandNotFound(cmd) => format!("envs: command not found: {cmd}"),
         CliError::NothingToRun => "envs: nothing to run. Try `envs --help`.".into(),

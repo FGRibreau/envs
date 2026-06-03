@@ -7,9 +7,15 @@ use std::process::Stdio;
 use tokio::process::Command;
 
 pub async fn execute(force: bool) -> Result<()> {
-    println!("envs setup wizard\n");
+    println!("envs setup — one-time bootstrap.\n");
+    println!("envs keeps secrets out of your filesystem: they live encrypted in Bitwarden, and a");
+    println!("background daemon (envsd) releases them to a single command only after a TouchID");
+    println!(
+        "approval. This wizard installs that daemon and the two tools it relies on, then logs"
+    );
+    println!("you into your vault. It's idempotent — safe to re-run anytime.\n");
 
-    println!("[1/6] Checking Homebrew...");
+    println!("[1/6] Homebrew (installs rbw + pinentry-touchid)...");
     if !brew_available().await {
         return Err(CliError::BadArgs(
             "Homebrew is required to install rbw + pinentry-touchid. \
@@ -19,7 +25,7 @@ pub async fn execute(force: bool) -> Result<()> {
     }
     println!("  ✓ brew is available");
 
-    println!("\n[2/6] rbw (Bitwarden CLI backend)...");
+    println!("\n[2/6] rbw (the Bitwarden client that decrypts your vault)...");
     ensure_brew_pkg("rbw", "rbw").await?;
     let rbw_version = Command::new("rbw")
         .arg("--version")
@@ -29,7 +35,7 @@ pub async fn execute(force: bool) -> Result<()> {
         .unwrap_or_default();
     println!("  ✓ {rbw_version}");
 
-    println!("\n[3/6] pinentry-touchid (TouchID-gated unlock)...");
+    println!("\n[3/6] pinentry-touchid (gates every vault unlock behind TouchID)...");
     let was_present = Command::new("pinentry-touchid")
         .arg("--version")
         .output()
@@ -64,7 +70,7 @@ pub async fn execute(force: bool) -> Result<()> {
             ),
         }
     }
-    println!("\n[4/6] rbw login state...");
+    println!("\n[4/6] rbw login (connect rbw to your vault — Bitwarden cloud or self-hosted)...");
     // Did login already happen? rbw stores the encrypted vault DB at
     // ~/.local/share/rbw/db.<email>.json after the first successful login.
     // `rbw config show` only proves the email is set — not that login worked.
@@ -176,7 +182,9 @@ pub async fn execute(force: bool) -> Result<()> {
         .await;
     println!("  ✓ rbw bound to pinentry-touchid for unlocks");
 
-    println!("\n[5/6] LaunchAgent for envsd...");
+    println!(
+        "\n[5/6] LaunchAgent (keeps envsd — the daemon that does the work — running at login)..."
+    );
     match install_launch_agent(force).await {
         Ok(InstallResult::Installed(path)) => println!("  ✓ installed at {}", path.display()),
         Ok(InstallResult::AlreadyInstalled(path)) => {
@@ -190,15 +198,21 @@ pub async fn execute(force: bool) -> Result<()> {
         Err(e) => println!("  ✗ {e}"),
     }
 
-    println!("\n[6/6] Registry sync...");
+    println!("\n[6/6] Registry (community env-var → vault-item suggestions)...");
     match sync_registry().await {
         Ok(msg) => println!("  ✓ {msg}"),
         Err(e) => println!("  ! {e} (you can run `envs registry sync` later)"),
     }
 
-    println!("\nSetup complete. envs auto-locks rbw between every resolve;");
-    println!("the first cold call will trigger pinentry-touchid (TouchID).");
-    println!("Try: envs daemon status");
+    println!("\nSetup complete.\n");
+    println!("How it works now:");
+    println!("  • Run any command via `envs <cmd>` (e.g. `envs flarectl zone list`).");
+    println!("  • The first call shows a popup: pick the env vars, scope, duration → TouchID.");
+    println!("  • Inside that window, repeat calls are silent; then the grant expires.");
+    println!("  • The vault auto-locks between calls; a cold call re-prompts pinentry-touchid.\n");
+    println!(
+        "Next: `envs daemon status` to confirm the daemon is up, then your first `envs <cmd>`."
+    );
     Ok(())
 }
 
@@ -329,9 +343,10 @@ async fn install_launch_agent(force: bool) -> Result<InstallResult> {
     };
     let home =
         dirs::home_dir().ok_or_else(|| crate::error::CliError::Internal("no home dir".into()))?;
-    let agents_dir = home.join("Library").join("LaunchAgents");
-    std::fs::create_dir_all(&agents_dir)?;
-    let plist_path = agents_dir.join("com.fgribreau.envsd.plist");
+    let plist_path = crate::commands::daemon::launch_agent_path()?;
+    if let Some(parent) = plist_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
 
     if plist_path.exists() && !force {
         return Ok(InstallResult::AlreadyInstalled(plist_path));

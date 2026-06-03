@@ -49,3 +49,10 @@ pub async fn send_request(req: &Request) -> Result<Response> {
     }
     Ok(resp)
 }
+
+/// Best-effort liveness probe: `true` when `envsd` answers a Ping. Used by the
+/// first-run onboarding path to tell "set up and running" apart from "the user
+/// still needs `envs init`".
+pub async fn daemon_reachable() -> bool {
+    matches!(send_request(&Request::Ping).await, Ok(Response::Pong))
+}
