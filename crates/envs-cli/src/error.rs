@@ -29,9 +29,6 @@ pub enum CliError {
     #[error("command not found: {0}")]
     CommandNotFound(String),
 
-    #[error("non-interactive: envs requires an interactive macOS session for TouchID prompts")]
-    NonInteractive,
-
     /// User-facing input/usage error (bad CLI args, missing prereqs the user must fix).
     /// Rendered without an "internal error:" prefix and exits 64 (EX_USAGE).
     #[error("{0}")]
@@ -46,7 +43,6 @@ impl CliError {
     pub fn exit_code(&self) -> i32 {
         match self {
             CliError::DaemonNotRunning => 75, // EX_TEMPFAIL
-            CliError::NonInteractive => 75,
             CliError::CommandNotFound(_) => 127,
             CliError::NothingToRun => 64, // EX_USAGE
             CliError::BadArgs(_) => 64,   // EX_USAGE
@@ -55,7 +51,8 @@ impl CliError {
                 ErrorCode::SystemBinaryRefused => 77,
                 ErrorCode::PeerVerificationFailed => 77,
                 ErrorCode::RbwLocked | ErrorCode::RbwNotInstalled => 75,
-                _ => 70, // EX_SOFTWARE
+                ErrorCode::NoGuiSession => 75, // EX_TEMPFAIL
+                _ => 70,                       // EX_SOFTWARE
             },
             _ => 70,
         }
@@ -67,9 +64,6 @@ pub fn format_user_error(e: &CliError) -> String {
     match e {
         CliError::DaemonNotRunning => {
             "envs: daemon is not running. Try `envs init` or start `envsd` manually.".into()
-        }
-        CliError::NonInteractive => {
-            "envs: requires an interactive macOS session for TouchID prompts (out of scope: SSH/CI/headless).".into()
         }
         CliError::CommandNotFound(cmd) => format!("envs: command not found: {cmd}"),
         CliError::NothingToRun => "envs: nothing to run. Try `envs --help`.".into(),
@@ -84,6 +78,12 @@ pub fn format_user_error(e: &CliError) -> String {
                 "envs: rbw is not installed. Run `brew install rbw`.".into()
             }
             ErrorCode::NotAuthorized => "envs: cancelled by user.".into(),
+            ErrorCode::NoGuiSession => {
+                "envs: no GUI session for the TouchID consent popup. A non-interactive caller \
+                 (MCP server, agent) can still authorise via the daemon's popup — but only while \
+                 you're logged in at the Mac's screen. Truly headless contexts (SSH without \
+                 display, CI) are out of scope: use BWS Secrets Manager or a machine identity there.".into()
+            }
             ErrorCode::PeerVerificationFailed => {
                 "envs: peer verification failed (caller identity mismatch).".into()
             }

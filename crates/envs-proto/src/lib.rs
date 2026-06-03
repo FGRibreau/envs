@@ -159,6 +159,10 @@ pub enum ErrorCode {
     TouchIdUnavailable,
     PeerVerificationFailed,
     ProtocolMismatch,
+    /// No GUI (Aqua) session to draw the consent popup into — a truly headless
+    /// context (SSH without display, CI). `envs` deliberately does not fall back
+    /// to a less secure mode here.
+    NoGuiSession,
     Internal,
 }
 

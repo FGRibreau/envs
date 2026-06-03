@@ -15,6 +15,7 @@ mod rbw;
 mod registry;
 mod rule;
 mod server;
+mod session;
 
 use crate::cache::{RuleCache, ValueCache};
 use crate::handlers::Handlers;

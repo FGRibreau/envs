@@ -38,6 +38,7 @@ impl Handlers {
                     DaemonError::RbwLookupFailed(_) => ErrorCode::RbwLookupFailed,
                     DaemonError::SystemBinaryRefused(_) => ErrorCode::SystemBinaryRefused,
                     DaemonError::NoProfile(_) => ErrorCode::BinaryNotInProfile,
+                    DaemonError::NoGuiSession => ErrorCode::NoGuiSession,
                     DaemonError::BadInput(_) => ErrorCode::Internal,
                     DaemonError::BadRbwUri(_) => ErrorCode::Internal,
                     DaemonError::RuleNotFound(_) => ErrorCode::Internal,
@@ -345,6 +346,22 @@ impl Handlers {
         } else {
             canon_name.clone()
         };
+
+        // A consent popup can only be shown when a GUI session exists. The
+        // popup is driven by this daemon's helper in the user's Aqua session,
+        // so a caller without a TTY (an MCP server or AI agent launched by
+        // launchd) is fine — it still gets the popup + TouchID. But a truly
+        // headless context (SSH without display, CI) has no window server, so
+        // we fail fast here instead of blocking on a popup that can never
+        // appear. The stub helper draws no real UI, so it skips the check
+        // (integration tests, non-macOS).
+        if !self.helper.is_stub() && !crate::session::gui_session_available() {
+            let _ = audit::event("no_gui_session")
+                .field("path", canon_path.to_string_lossy())
+                .field("binary", &binary_name)
+                .write();
+            return Err(DaemonError::NoGuiSession);
+        }
 
         let request_id = ulid::Ulid::new().to_string();
         let suggested = crate::discovery::discover(canon_path, &binary_name).await;

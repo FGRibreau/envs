@@ -47,6 +47,9 @@ pub enum DaemonError {
     #[error("no profile or registry entry for {0}")]
     NoProfile(String),
 
+    #[error("no GUI session available to show the consent popup")]
+    NoGuiSession,
+
     #[error("internal: {0}")]
     Internal(String),
 }

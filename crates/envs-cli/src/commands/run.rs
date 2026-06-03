@@ -18,10 +18,15 @@ pub async fn execute(argv: Vec<String>, profiles: &[String], binds: &[String]) -
     // Parse `--bind KEY=rbw://item/field` flags into Binding structs.
     let extra_bindings = parse_bindings(binds)?;
 
-    // Interactive session check (envs is interactive-only).
-    if !is_interactive() {
-        return Err(CliError::NonInteractive);
-    }
+    // Is there a usable terminal for CLI-side stdin prompts? This no longer
+    // gates whether `envs` runs: a non-TTY caller (an MCP server or AI agent
+    // with no controlling terminal) still gets the native consent popup +
+    // TouchID, because the popup is driven by the daemon's helper in the user's
+    // GUI session — not by this process. `tty` only decides whether the
+    // stdin-based "add binding" fallback below is available. Truly headless
+    // contexts (no GUI session at all) are rejected daemon-side with
+    // NoGuiSession.
+    let tty = is_interactive();
 
     // Resolve binary path: absolute, relative, or PATH lookup.
     let cmd_arg = &argv[0];
@@ -39,9 +44,9 @@ pub async fn execute(argv: Vec<String>, profiles: &[String], binds: &[String]) -
     // Try resolving once. If the daemon reports BinaryNotInProfile (no
     // suggestions, no profile, no inline binds) AND we're attached to a TTY,
     // prompt the user inline for KEY=rbw://... pairs and retry. This is the
-    // CLI-side equivalent of the popup's "+ Add custom binding" affordance —
-    // the AppKit popup arrives in v0.4 but users still need to authorise
-    // unknown binaries today.
+    // CLI-side equivalent of the popup's "+ Add custom binding" affordance.
+    // Without a TTY there is no stdin to read, so we let the error propagate —
+    // the daemon's native popup already drives this case via osascript dialogs.
     let entries = match try_resolve(
         &canon_path,
         sha256.clone(),
@@ -59,7 +64,7 @@ pub async fn execute(argv: Vec<String>, profiles: &[String], binds: &[String]) -
         Err(CliError::Daemon {
             code: ErrorCode::BinaryNotInProfile,
             message,
-        }) => {
+        }) if tty => {
             let typed_name = argv
                 .first()
                 .and_then(|s| Path::new(s).file_name().and_then(|f| f.to_str()))

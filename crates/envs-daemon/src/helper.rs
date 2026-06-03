@@ -29,6 +29,12 @@ pub struct HelperHandle {
 }
 
 impl HelperHandle {
+    /// Whether this handle is the auto-authorize stub (no real popup/UI).
+    /// Used to skip GUI-session gating in tests and on non-macOS.
+    pub fn is_stub(&self) -> bool {
+        self.stub
+    }
+
     /// Create a stub helper that auto-authorizes every request.
     pub fn stub() -> Self {
         Self {
@@ -230,8 +236,10 @@ impl HelperHandle {
     /// Submit a request to the helper. Awaits the user decision.
     ///
     /// Per spec section "Concurrence": no timeout, cancel explicite uniquement.
-    /// The user may take arbitrarily long to respond — `envs` is interactive only,
-    /// so blocking is acceptable. The CLI side has its own connection lifecycle.
+    /// The user may take arbitrarily long to respond — the consent popup is
+    /// human-driven, so blocking is acceptable. The CLI side has its own
+    /// connection lifecycle. Callers reach this only after a GUI session has
+    /// been confirmed (see `create_via_helper`), so the popup will be shown.
     /// `_timeout` is kept in the signature for backwards compatibility but ignored.
     pub async fn request(&self, req: PromptRequest, _timeout: Duration) -> Result<HelperReply> {
         if self.stub {
