@@ -9,12 +9,42 @@
 use crate::error::{DaemonError, Result};
 use envs_proto::{Binding, GrantScope, HelperEvent, HelperReply, ProfileTarget, PromptRequest};
 use std::collections::HashMap;
+use std::ffi::OsString;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{oneshot, Mutex};
+
+/// Helper binary name. Resolved next to `envsd` first (see `resolve_helper_path`).
+const HELPER_BIN: &str = "envs-prompt";
+
+/// User-facing message when the helper pipeline is permanently down. Covers both
+/// "couldn't be started" (the common case: not found next to envsd / not on
+/// PATH) and "started but kept crashing".
+const HELPER_UNAVAILABLE: &str =
+    "could not run the envs-prompt helper — ensure it is installed next to envsd \
+     (same directory, e.g. `cargo install envs-prompt`) and is not crashing";
+
+/// Resolve the `envs-prompt` helper binary.
+///
+/// `envsd` and `envs-prompt` are always installed together — same `cargo install`
+/// bin directory, same release tarball — so prefer the copy sitting next to the
+/// running daemon. This is what makes the helper findable when `envsd` runs under
+/// launchd, whose PATH (`/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`) does
+/// NOT include `~/.cargo/bin`. Fall back to a bare PATH lookup for unusual
+/// layouts or development.
+fn resolve_helper_path(self_exe: Option<&Path>) -> OsString {
+    if let Some(dir) = self_exe.and_then(Path::parent) {
+        let sibling = dir.join(HELPER_BIN);
+        if sibling.is_file() {
+            return sibling.into_os_string();
+        }
+    }
+    OsString::from(HELPER_BIN)
+}
 
 pub struct HelperHandle {
     /// Pending requests, keyed by request_id, awaiting helper reply.
@@ -61,6 +91,9 @@ impl HelperHandle {
         let degraded = Arc::new(AtomicBool::new(false));
         let degraded_for_supervisor = degraded.clone();
         let (stdin_tx, mut stdin_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+        // Resolve the helper once, next to our own binary, so a restricted
+        // launchd PATH can't hide it.
+        let helper_bin = resolve_helper_path(std::env::current_exe().ok().as_deref());
         tokio::spawn(async move {
             let mut retry_window: Vec<std::time::Instant> = Vec::new();
             loop {
@@ -84,8 +117,7 @@ impl HelperHandle {
                     for (request_id, tx) in entries {
                         let _ = tx.send(HelperReply::Error {
                             request_id,
-                            message: "envs-prompt subprocess unavailable (crashed too many times)"
-                                .into(),
+                            message: HELPER_UNAVAILABLE.into(),
                         });
                     }
                     break;
@@ -93,10 +125,11 @@ impl HelperHandle {
                 retry_window.push(now);
 
                 tracing::info!(
+                    bin = %helper_bin.to_string_lossy(),
                     "spawning envs-prompt (retry {}/3 in 30s window)",
                     retry_window.len()
                 );
-                let child = match Command::new("envs-prompt")
+                let child = match Command::new(&helper_bin)
                     .stdin(std::process::Stdio::piped())
                     .stdout(std::process::Stdio::piped())
                     .stderr(std::process::Stdio::inherit())
@@ -105,7 +138,11 @@ impl HelperHandle {
                 {
                     Ok(c) => c,
                     Err(e) => {
-                        tracing::warn!(?e, "failed to spawn envs-prompt; retrying in 1s");
+                        tracing::warn!(
+                            ?e,
+                            bin = %helper_bin.to_string_lossy(),
+                            "failed to spawn envs-prompt; retrying in 1s"
+                        );
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         continue;
                     }
@@ -145,7 +182,8 @@ impl HelperHandle {
     /// Same signature kept for tests; logic now in spawn_real with respawn.
     #[allow(dead_code)]
     async fn _legacy_spawn_real() -> Result<Self> {
-        let mut child = Command::new("envs-prompt")
+        let helper_bin = resolve_helper_path(std::env::current_exe().ok().as_deref());
+        let mut child = Command::new(&helper_bin)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::inherit())
@@ -247,9 +285,7 @@ impl HelperHandle {
         }
 
         if self.degraded.load(Ordering::SeqCst) {
-            return Err(DaemonError::Helper(
-                "envs-prompt subprocess unavailable (crashed too many times)".into(),
-            ));
+            return Err(DaemonError::Helper(HELPER_UNAVAILABLE.into()));
         }
 
         let id = req.request_id.clone();
@@ -415,4 +451,37 @@ async fn run_one_helper_session(
     let _ = read_handle.await;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn helper_path_prefers_sibling_of_daemon() {
+        // envsd and envs-prompt installed together → resolve the sibling,
+        // independent of PATH (the launchd-restricted-PATH bug).
+        let dir = tempfile::tempdir().unwrap();
+        let envsd = dir.path().join("envsd");
+        let helper = dir.path().join(HELPER_BIN);
+        std::fs::write(&envsd, b"x").unwrap();
+        std::fs::write(&helper, b"x").unwrap();
+        assert_eq!(resolve_helper_path(Some(&envsd)), helper.into_os_string());
+    }
+
+    #[test]
+    fn helper_path_falls_back_to_bare_name_when_no_sibling() {
+        let dir = tempfile::tempdir().unwrap();
+        let envsd = dir.path().join("envsd"); // no sibling helper created
+        std::fs::write(&envsd, b"x").unwrap();
+        assert_eq!(
+            resolve_helper_path(Some(&envsd)),
+            OsString::from(HELPER_BIN)
+        );
+    }
+
+    #[test]
+    fn helper_path_falls_back_to_bare_name_when_self_exe_unknown() {
+        assert_eq!(resolve_helper_path(None), OsString::from(HELPER_BIN));
+    }
 }

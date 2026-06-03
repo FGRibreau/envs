@@ -11,11 +11,7 @@ pub async fn execute(action: super::super::DaemonAction) -> Result<()> {
     match action {
         DaemonAction::Start => start().await,
         DaemonAction::Stop => stop().await,
-        DaemonAction::Restart => {
-            stop().await.ok();
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            start().await
-        }
+        DaemonAction::Restart => restart().await,
         DaemonAction::Status => status().await,
         DaemonAction::Install => install_launch_agent(false).await,
         DaemonAction::Uninstall => uninstall_launch_agent().await,
@@ -107,6 +103,61 @@ async fn start() -> Result<()> {
     println!("✓ envsd spawned (pid {})", child.id());
     println!("  logs: {}/envsd.{{stdout,stderr}}.log", log_dir.display());
     Ok(())
+}
+
+async fn restart() -> Result<()> {
+    let plist = launch_agent_path()?;
+    if !plist.exists() {
+        // No LaunchAgent — fall back to pid-based stop + direct start.
+        stop().await.ok();
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        return start().await;
+    }
+
+    // LaunchAgent-managed: a plain `kickstart` keeps launchd's cached
+    // code-signing requirement (LWCR) pinned to the previous binary's cdhash,
+    // so a rebuilt envsd is killed at exec with OS_REASON_CODESIGNING. Tearing
+    // the service out and bootstrapping it again forces launchd to re-read the
+    // current binary's signature.
+    let uid = unsafe { libc::getuid() };
+    let label = format!("gui/{uid}/com.fgribreau.envsd");
+    let domain = format!("gui/{uid}");
+
+    // bootout is best-effort: it errors when the service isn't loaded, which is
+    // exactly the state we want before bootstrapping.
+    let _ = Command::new("launchctl")
+        .arg("bootout")
+        .arg(&label)
+        .output()
+        .await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    let out = Command::new("launchctl")
+        .arg("bootstrap")
+        .arg(&domain)
+        .arg(&plist)
+        .output()
+        .await?;
+    if !out.status.success() {
+        return Err(CliError::Internal(format!(
+            "launchctl bootstrap failed (exit {:?}): {}",
+            out.status.code(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        )));
+    }
+
+    // Confirm it actually came up — this is what catches a fresh code-signing
+    // kill or a binary that crashes on boot, instead of reporting a false success.
+    for _ in 0..20 {
+        if client::daemon_reachable().await {
+            println!("✓ envsd re-bootstrapped and answering");
+            return Ok(());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    Err(CliError::Internal(
+        "envsd was bootstrapped but is not answering — check `envs daemon status` and ~/.envs/logs/envsd.stderr.log".into(),
+    ))
 }
 
 async fn stop() -> Result<()> {
