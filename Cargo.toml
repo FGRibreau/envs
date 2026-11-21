@@ -14,7 +14,7 @@ license = "MIT"
 authors = ["François-Guillaume Ribreau <fg@france-nuage.fr>"]
 repository = "https://github.com/fgribreau/envs"
 homepage = "https://github.com/fgribreau/envs"
-version = "0.1.0"
+version = "0.2.0"
 
 [workspace.lints.clippy]
 # Allowed by design — see comments at the relevant sites.
