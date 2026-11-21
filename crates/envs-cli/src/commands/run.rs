@@ -109,8 +109,8 @@ pub async fn execute(argv: Vec<String>, profiles: &[String], binds: &[String]) -
         })?)?;
     let args = exec::cstrings(argv.iter().map(String::as_str))?;
 
-    let _: std::convert::Infallible = exec::run(exec::ExecArgs { argv0, args, env })?;
-    unreachable!("execve replaces the current process on success")
+    // execve replaces the process: only an error returns.
+    match exec::run(exec::ExecArgs { argv0, args, env })? {}
 }
 
 #[allow(clippy::too_many_arguments)]
